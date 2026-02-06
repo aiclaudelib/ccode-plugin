@@ -5,7 +5,7 @@ Claude Code plugin for creating skills, agents, hooks, and plugins with guided w
 ## Installation
 
 ```bash
-claude plugin add <repo-url>
+claude plugin add aiclaudelib/ccode-plugin
 ```
 
 ## Commands
