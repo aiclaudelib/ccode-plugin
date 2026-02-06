@@ -1,0 +1,22 @@
+{
+  "description": "Validation hooks for ccode plugin — validates SKILL.md frontmatter and hooks.json schema",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/validate-skill-frontmatter.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/validate-hooks-json.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

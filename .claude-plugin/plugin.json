@@ -1,0 +1,8 @@
+{
+  "name": "ccode",
+  "version": "1.0.0",
+  "description": "Create Claude Code skills, agents, hooks, and plugins with guided workflows, validation, and precise documentation knowledge",
+  "author": { "name": "Daniil Kuznetsov" },
+  "license": "MIT",
+  "keywords": ["skills", "agents", "hooks", "plugins", "scaffolding", "generator"]
+}
