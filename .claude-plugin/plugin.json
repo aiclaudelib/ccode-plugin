@@ -1,9 +1,9 @@
 {
   "name": "ccode",
   "version": "1.0.0",
-  "description": "Create Claude Code skills, agents, hooks, and plugins with guided workflows, validation, and precise documentation knowledge",
+  "description": "Create Claude Code skills, agents, hooks, MCP integrations, and plugins with guided workflows, validation, documentation knowledge, and review agents",
   "author": { "name": "Daniil Kuznetsov" },
   "repository": "https://github.com/aiclaudelib/ccode-plugin",
   "license": "MIT",
-  "keywords": ["skills", "agents", "hooks", "plugins", "scaffolding", "generator"]
+  "keywords": ["skills", "agents", "hooks", "plugins", "scaffolding", "generator", "mcp", "settings", "validator", "reviewer"]
 }

@@ -110,11 +110,19 @@ Each skill lives in `skills/<name>/SKILL.md` with frontmatter:
 
 ### When Creating a Plugin
 
-1. **Ask the user**: plugin name, purpose, which components, details for each
-2. **Read knowledge** if needed:
-   - `${CLAUDE_PLUGIN_ROOT}/knowledge/plugins.md`
-   - `${CLAUDE_PLUGIN_ROOT}/knowledge/plugins-reference.md`
+Follow the 8-phase workflow:
+
+1. **Discovery**: Ask the user for plugin name, purpose, which components, details for each
+2. **Component Planning**: List all skills, agents, hooks, MCP servers, settings needed. Present plan for confirmation
+3. **Detailed Design**: Clarify implementation details for each component (system prompts, tool lists, hook scripts, MCP configs)
+4. **Consult Knowledge** — read relevant knowledge files:
+   - `${CLAUDE_PLUGIN_ROOT}/knowledge/plugins.md` — plugin creation guide
+   - `${CLAUDE_PLUGIN_ROOT}/knowledge/plugins-reference.md` — manifest schema
+   - `${CLAUDE_PLUGIN_ROOT}/knowledge/plugin-structure.md` — directory layout and organization patterns
    - `${CLAUDE_PLUGIN_ROOT}/knowledge/hooks-reference-core.md` (if creating hooks)
-3. **Scaffold** the complete directory structure with all requested components
-4. **Generate all files directly** (subagents can't spawn subagents)
-5. **Verify**: `plugin.json` has valid `name`, components at root, `${CLAUDE_PLUGIN_ROOT}` paths, scripts executable
+   - `${CLAUDE_PLUGIN_ROOT}/knowledge/mcp-integration.md` (if creating MCP servers)
+   - `${CLAUDE_PLUGIN_ROOT}/knowledge/plugin-settings.md` (if creating settings)
+5. **Structure Creation**: Scaffold directories and manifest
+6. **Component Implementation**: Generate all files directly (subagents can't spawn subagents). Make scripts executable
+7. **Validation**: Verify `plugin.json` has valid `name`, components at root, `${CLAUDE_PLUGIN_ROOT}` paths, scripts executable. Suggest running the `plugin-validator` agent for comprehensive validation
+8. **Testing & Documentation**: Provide testing checklist (`claude --plugin-dir`, test skills, verify hooks, check `/mcp`), list created files, suggest next steps

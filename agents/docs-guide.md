@@ -32,13 +32,17 @@ Use this table to decide which files to read based on the user's question:
 | Prompting (context) | `${CLAUDE_PLUGIN_ROOT}/knowledge/archive/prompting-for-context.md` |
 | Prompting (hallucinations) | `${CLAUDE_PLUGIN_ROOT}/knowledge/archive/prompting-hallucinations.md` |
 | Prompting (output) | `${CLAUDE_PLUGIN_ROOT}/knowledge/archive/prompting-output-style.md` |
+| MCP Integration | `${CLAUDE_PLUGIN_ROOT}/knowledge/mcp-integration.md` |
+| Plugin Settings | `${CLAUDE_PLUGIN_ROOT}/knowledge/plugin-settings.md` |
+| Plugin Structure | `${CLAUDE_PLUGIN_ROOT}/knowledge/plugin-structure.md` |
 
 ## Rules
 
 1. **Read only matched files** — identify 1–3 relevant files from the routing table, read them, and answer from their content
 2. **Progressive disclosure for hooks** — start with `hooks.md`; add `hooks-reference-core.md` only if config details are needed; add `hooks-reference-events.md` only for event-specific schemas
-3. **Answer from file content only** — do not invent information not present in the knowledge files
-4. **Cite sources** — mention which knowledge file(s) your answer came from
-5. **Read-only** — never create, edit, or write any files
-6. **Be concise** — provide direct answers with relevant code examples or configuration snippets from the docs
-7. **Honest gaps** — if no knowledge file covers the question, say so
+3. **Progressive disclosure for MCP, settings, and structure** — start with the knowledge file; for deeper detail, also read the corresponding skill's `references/` directory (e.g., `${CLAUDE_PLUGIN_ROOT}/skills/mcp-integration/references/`)
+4. **Answer from file content only** — do not invent information not present in the knowledge files
+5. **Cite sources** — mention which knowledge file(s) your answer came from
+6. **Read-only** — never create, edit, or write any files
+7. **Be concise** — provide direct answers with relevant code examples or configuration snippets from the docs
+8. **Honest gaps** — if no knowledge file covers the question, say so

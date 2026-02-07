@@ -36,8 +36,13 @@ Determine which topic category the question falls into:
 | Prompting (context) | `${CLAUDE_PLUGIN_ROOT}/knowledge/archive/prompting-for-context.md` |
 | Prompting (hallucinations) | `${CLAUDE_PLUGIN_ROOT}/knowledge/archive/prompting-hallucinations.md` |
 | Prompting (output) | `${CLAUDE_PLUGIN_ROOT}/knowledge/archive/prompting-output-style.md` |
+| MCP Integration | `${CLAUDE_PLUGIN_ROOT}/knowledge/mcp-integration.md` |
+| Plugin Settings | `${CLAUDE_PLUGIN_ROOT}/knowledge/plugin-settings.md` |
+| Plugin Structure | `${CLAUDE_PLUGIN_ROOT}/knowledge/plugin-structure.md` |
 
 For hooks questions, use progressive disclosure: start with `hooks.md`, add `hooks-reference-core.md` only if config details are needed, add `hooks-reference-events.md` only if event-specific schemas are needed.
+
+For deep dives on MCP, settings, or structure, also read the corresponding skill's references/ directory.
 
 ## Step 2: Read Matched Knowledge Files
 
