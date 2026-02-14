@@ -35,6 +35,7 @@ Use this table to decide which files to read based on the user's question:
 | MCP Integration | `${CLAUDE_PLUGIN_ROOT}/knowledge/mcp-integration.md` |
 | Plugin Settings | `${CLAUDE_PLUGIN_ROOT}/knowledge/plugin-settings.md` |
 | Plugin Structure | `${CLAUDE_PLUGIN_ROOT}/knowledge/plugin-structure.md` |
+| Plugin Marketplaces | `${CLAUDE_PLUGIN_ROOT}/knowledge/plugin-marketplaces.md` |
 
 ## Rules
 

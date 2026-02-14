@@ -99,8 +99,6 @@ Commands run first, output replaces the placeholder. This is preprocessing.
 
 Add `context: fork` to run in an isolated subagent. The skill content becomes the subagent's prompt (no conversation history).
 
-**Important**: `context: fork` only makes sense for skills with explicit task instructions, not just guidelines.
-
 | Approach | System prompt | Task |
 |---|---|---|
 | Skill with `context: fork` | From agent type | SKILL.md content |
@@ -108,14 +106,37 @@ Add `context: fork` to run in an isolated subagent. The skill content becomes th
 
 The `agent` field specifies which subagent config: built-in (`Explore`, `Plan`, `general-purpose`) or custom from `.claude/agents/`. Default: `general-purpose`.
 
+### When `context: fork` is required
+
+**Orchestrator skills** — skills that spawn subagents via `Task` tool — **must** use `context: fork`. Without it, every subagent completion sends a notification to the main session, triggering a new turn. Each turn fires all Stop hooks (project + plugin). With many subagents this creates a cascade:
+
+- 40 subagents × 7 Stop hooks = 280 hook executions
+- Each notification triggers a "Standing by" turn in the main session
+- User sees a flood of empty messages instead of a clean result
+
+With `context: fork`, all subagent notifications stay inside the forked orchestrator. The main session receives a single result when the orchestrator finishes.
+
+### When `context: fork` must NOT be used
+
+**Interactive skills** — skills that use `AskUserQuestion` to prompt the user — must stay inline (no fork). `AskUserQuestion` does not work from a forked context because the forked subagent cannot interact with the user.
+
+### Decision guide
+
+| Skill type | `context: fork` | Why |
+|---|---|---|
+| Spawns subagents via `Task` | **Required** | Prevents notification flooding and hook cascading |
+| Uses `AskUserQuestion` | **No** | User interaction doesn't work from fork |
+| Explicit task instructions | Recommended | Isolates execution, cleaner output |
+| Guidelines / reference only | No | No task to execute in isolation |
+
 ## Supporting files
 
 Keep SKILL.md under 500 lines. Move detailed reference to separate files:
 
 ```markdown
 ## Additional resources
-- For complete API details, see [reference.md](reference.md)
-- For usage examples, see [examples.md](examples.md)
+- For complete API details, see `reference.md`
+- For usage examples, see `examples.md`
 ```
 
 Keep references one level deep from SKILL.md.

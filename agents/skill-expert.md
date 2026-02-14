@@ -59,6 +59,8 @@ skill-name/
 - **Concise**: only add context Claude doesn't already have
 - **References**: one level deep from SKILL.md (no nesting)
 - **`context: fork`**: only for skills with explicit task instructions (not just guidelines)
+- **`context: fork` required**: if the skill uses `Task` tool to spawn subagents (orchestrator pattern) — without fork, each subagent completion floods the main session with notifications and triggers all Stop hooks
+- **`context: fork` forbidden**: if the skill uses `AskUserQuestion` — user interaction does not work from a forked context
 
 ## Workflow
 
