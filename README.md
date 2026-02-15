@@ -10,19 +10,43 @@ workflows, validation, documentation knowledge, and review agents.
 /plugin install ccode@aiclaudelib
 ```
 
-## Commands
+## Usage
 
-| Command                      | Description                                                                                                                                                          |
-|------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `/ccode:ask`                 | Answers questions about Claude Code features, configuration, CLI, prompting strategies, plugins, skills, hooks, agents, teams, containers, and enterprise governance |
-| `/ccode:create-plugin`       | Scaffold a complete Claude Code plugin with manifest, skills, agents, hooks, and scripts (8-phase guided workflow)                                                   |
-| `/ccode:create-skill`        | Scaffold a new skill with correct SKILL.md frontmatter, progressive disclosure, and best practices                                                                   |
-| `/ccode:create-agent`        | Scaffold a new custom subagent with correct frontmatter, tool configuration, and system prompt                                                                       |
-| `/ccode:create-hook`         | Create hook configurations and validation scripts for all 12 hook events                                                                                             |
-| `/ccode:mcp-integration`     | Guidance on MCP server types (stdio, SSE, HTTP, WebSocket), authentication, tool naming, and configuration                                                           |
-| `/ccode:plugin-settings`     | Guidance on the `.local.md` settings pattern, YAML frontmatter parsing, and reading settings from hooks/commands/agents                                              |
-| `/ccode:plugin-structure`    | Guidance on plugin directory layout, manifest schema, component organization, and auto-discovery                                                                     |
-| `/ccode:plugin-marketplaces` | Guidance on creating and distributing plugin marketplaces, marketplace.json schema, plugin sources, hosting, and team configuration                                  |
+Single entry point for all plugin development tasks:
+
+```
+/ccode create a plugin for code linting
+/ccode create a skill that formats markdown
+/ccode create an agent for database queries
+/ccode create a PreToolUse hook for Bash validation
+/ccode how do MCP servers work in plugins?
+/ccode what is the plugin.json manifest schema?
+/ccode how do plugin settings (.local.md) work?
+/ccode how do I create a plugin marketplace?
+```
+
+The `/ccode` command routes your request to the appropriate specialist agent automatically.
+
+Claude also auto-invokes internal skills when relevant — saying "create a Claude Code hook" in conversation works
+without explicitly using `/ccode`.
+
+## Architecture
+
+```
+/ccode "user request"
+   │
+   └── master agent (router)
+          │
+          ├── reads internal skill workflow
+          │
+          └── delegates via Task tool
+                 ├── docs-guide        → Q&A, MCP, settings, structure, marketplaces
+                 ├── plugin-architect   → plugin & agent creation
+                 ├── skill-expert       → skill creation
+                 ├── hook-expert        → hook creation
+                 ├── plugin-validator   → plugin validation
+                 └── skill-reviewer     → skill quality review
+```
 
 ## Structure
 
@@ -31,16 +55,19 @@ ccode/
 ├── .claude-plugin/
 │   └── plugin.json            # Plugin manifest
 ├── skills/
-│   ├── ask/                   # Knowledge Q&A skill
-│   ├── create-plugin/         # Plugin scaffolding (8-phase workflow)
-│   ├── create-skill/          # Skill scaffolding
-│   ├── create-agent/          # Agent scaffolding
-│   ├── create-hook/           # Hook scaffolding
-│   ├── mcp-integration/       # MCP server guidance with references and examples
-│   ├── plugin-settings/       # Plugin settings guidance with references and examples
-│   ├── plugin-structure/      # Plugin structure guidance with references and examples
-│   └── plugin-marketplaces/   # Marketplace creation guidance with references and examples
+│   ├── ccode/                 # User-facing entry point (/ccode)
+│   │   └── SKILL.md
+│   ├── ask/                   # Internal: knowledge Q&A
+│   ├── create-plugin/         # Internal: plugin scaffolding (8-phase workflow)
+│   ├── create-skill/          # Internal: skill scaffolding
+│   ├── create-agent/          # Internal: agent scaffolding
+│   ├── create-hook/           # Internal: hook scaffolding
+│   ├── mcp-integration/       # Internal: MCP server guidance with references
+│   ├── plugin-settings/       # Internal: plugin settings guidance with references
+│   ├── plugin-structure/      # Internal: plugin structure guidance with references
+│   └── plugin-marketplaces/   # Internal: marketplace guidance with references
 ├── agents/
+│   ├── master.md              # Central router
 │   ├── docs-guide.md          # Documentation router
 │   ├── hook-expert.md         # Hook & automation specialist
 │   ├── plugin-architect.md    # Plugin lead architect
@@ -49,7 +76,7 @@ ccode/
 │   └── skill-reviewer.md      # Skill quality reviewer
 ├── hooks/
 │   └── hooks.json             # Validation hooks config
-├── knowledge/                 # 22 documentation files
+├── knowledge/                 # Documentation files
 ├── scripts/
 │   ├── clean-knowledge.sh     # Knowledge file cleanup
 │   ├── hook-linter.sh         # Lint hooks.json for common issues

@@ -2,6 +2,7 @@
 name: create-hook
 description: Create Claude Code hook configurations and validation scripts. Supports all 12 hook events, command/prompt/agent types, and proper JSON schemas.
 argument-hint: "[event-name]"
+user-invocable: false
 context: fork
 agent: ccode:hook-expert
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep

@@ -2,6 +2,7 @@
 name: plugin-settings
 description: Answers questions about plugin settings files in Claude Code. Use when the user asks about .local.md files, plugin configuration patterns, storing plugin state, reading YAML frontmatter from hooks, per-project plugin settings, the .claude/plugin-name.local.md convention, or making plugin behavior user-configurable.
 argument-hint: "[question about plugin settings]"
+user-invocable: false
 context: fork
 agent: ccode:docs-guide
 allowed-tools: Read, Glob, Grep

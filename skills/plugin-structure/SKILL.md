@@ -2,6 +2,7 @@
 name: plugin-structure
 description: Answers questions about Claude Code plugin directory structure, organization, and manifest configuration. Use when the user asks about plugin layout, plugin.json schema, component organization (commands, agents, skills, hooks), auto-discovery, ${CLAUDE_PLUGIN_ROOT}, file naming conventions, or plugin architecture patterns.
 argument-hint: "[question about plugin structure]"
+user-invocable: false
 context: fork
 agent: ccode:docs-guide
 allowed-tools: Read, Glob, Grep

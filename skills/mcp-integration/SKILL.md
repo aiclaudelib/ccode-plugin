@@ -2,6 +2,7 @@
 name: mcp-integration
 description: Answers questions about MCP server integration in Claude Code plugins. Use when the user asks about adding MCP servers, configuring .mcp.json, MCP server types (stdio, SSE, HTTP, WebSocket), MCP tool naming, MCP authentication patterns, environment variable expansion, or connecting external services via Model Context Protocol.
 argument-hint: "[question about MCP integration]"
+user-invocable: false
 context: fork
 agent: ccode:docs-guide
 allowed-tools: Read, Glob, Grep

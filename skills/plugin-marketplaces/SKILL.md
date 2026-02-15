@@ -2,6 +2,7 @@
 name: plugin-marketplaces
 description: Answers questions about creating and distributing Claude Code plugin marketplaces. Use when the user asks about marketplace.json schema, marketplace file structure, plugin sources (GitHub, git URL, relative paths), hosting marketplaces, team marketplace configuration, strictKnownMarketplaces, extraKnownMarketplaces, marketplace validation, marketplace catalogs, or distributing plugins via catalogs.
 argument-hint: "[question about plugin marketplaces]"
+user-invocable: false
 context: fork
 agent: ccode:docs-guide
 allowed-tools: Read, Glob, Grep

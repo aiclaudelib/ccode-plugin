@@ -2,6 +2,7 @@
 name: create-plugin
 description: Scaffold a complete Claude Code plugin with manifest, skills, agents, hooks, and scripts. Creates the full directory structure ready for testing.
 argument-hint: "[plugin-name]"
+user-invocable: false
 context: fork
 agent: ccode:plugin-architect
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep

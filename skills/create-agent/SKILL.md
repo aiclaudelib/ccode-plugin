@@ -2,6 +2,7 @@
 name: create-agent
 description: Scaffold a new Claude Code custom subagent with correct frontmatter, tool configuration, and system prompt. Creates the agent markdown file.
 argument-hint: "[agent-name]"
+user-invocable: false
 context: fork
 agent: ccode:plugin-architect
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep

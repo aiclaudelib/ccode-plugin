@@ -2,6 +2,7 @@
 name: create-skill
 description: Scaffold a new Claude Code skill with correct SKILL.md frontmatter, progressive disclosure, and best practices. Creates the skill directory and files.
 argument-hint: "[skill-name]"
+user-invocable: false
 context: fork
 agent: ccode:skill-expert
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep

@@ -2,6 +2,7 @@
 name: ask
 description: Answers general questions about Claude Code features, configuration, CLI, prompting strategies, plugins, skills, hooks, agents, teams, containers, and enterprise governance. Use when the user asks how something works or needs documentation guidance — not when they want to create or scaffold something.
 argument-hint: "[question]"
+user-invocable: false
 context: fork
 agent: ccode:docs-guide
 allowed-tools: Read, Glob, Grep
