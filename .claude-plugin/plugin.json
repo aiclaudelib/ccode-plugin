@@ -1,6 +1,6 @@
 {
   "name": "ccode",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Create Claude Code skills, agents, hooks, MCP integrations, plugins, and marketplaces with guided workflows, validation, documentation knowledge, and review agents",
   "author": { "name": "Daniil Kuznetsov" },
   "repository": "https://github.com/aiclaudelib/ccode-plugin",
