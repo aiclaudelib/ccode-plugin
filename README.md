@@ -3,6 +3,8 @@
 Claude Code plugin for creating skills, agents, hooks, MCP integrations, plugins, and marketplaces with guided
 workflows, validation, documentation knowledge, and review agents.
 
+<img src="assets/demo.png" width="400" />
+
 ## Installation
 
 ```
