@@ -120,7 +120,7 @@ Each plugin entry needs at minimum a `name` and `source`. You can also include a
 | `keywords` | array | Tags for discovery and categorization |
 | `category` | string | Plugin category for organization |
 | `tags` | array | Tags for searchability |
-| `strict` | boolean | When true (default), marketplace fields merge with plugin.json. When false, the marketplace entry defines the plugin entirely and plugin.json must not declare components. |
+| `strict` | boolean | When true (default), `plugin.json` is the authority for component definitions; the marketplace entry can supplement it with additional components, and both sources are merged. When false, the marketplace entry is the entire definition; if `plugin.json` also declares components, the plugin fails to load. |
 
 **Component configuration:**
 
@@ -134,6 +134,10 @@ Each plugin entry needs at minimum a `name` and `source`. You can also include a
 
 ## Plugin sources
 
+Once a plugin is cloned or copied into the local machine, it is copied into the local versioned plugin cache at `~/.claude/plugins/cache`.
+
+> **Marketplace sources vs plugin sources**: These are different concepts. **Marketplace source** is where to fetch the `marketplace.json` catalog itself (set when users run `/plugin marketplace add` or in `extraKnownMarketplaces`; supports `ref` but not `sha`). **Plugin source** is where to fetch an individual plugin listed in the marketplace (set in the `source` field of each plugin entry; supports both `ref` and `sha`).
+
 ### Relative paths
 
 For plugins in the same repository:
@@ -145,7 +149,7 @@ For plugins in the same repository:
 }
 ```
 
-**Note**: Relative paths only work when users add your marketplace via Git (GitHub, GitLab, or git URL). They do NOT work with URL-based marketplaces.
+**Note**: Relative paths must start with `./`. They only work when users add your marketplace via Git (GitHub, GitLab, or git URL). They do NOT work with URL-based marketplaces.
 
 ### GitHub repositories
 
@@ -197,6 +201,46 @@ Pin to a specific version:
 | `ref` | string | Optional. Git branch or tag |
 | `sha` | string | Optional. Full 40-character commit SHA |
 
+### npm packages
+
+```json
+{
+  "name": "npm-plugin",
+  "source": {
+    "source": "npm",
+    "package": "my-claude-plugin",
+    "version": "1.0.0"
+  }
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `package` | string | Required. npm package name |
+| `version` | string | Optional. Semver version or range |
+| `registry` | string | Optional. Custom npm registry URL |
+
+### pip packages
+
+```json
+{
+  "name": "pip-plugin",
+  "source": {
+    "source": "pip",
+    "package": "my-claude-plugin",
+    "version": "1.0.0"
+  }
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `package` | string | Required. pip package name |
+| `version` | string | Optional. Version specifier |
+| `registry` | string | Optional. Custom PyPI registry URL |
+
+> **Note**: npm and pip sources may not yet be fully implemented. Prefer `github` or local path sources for production use.
+
 ## Hosting and distribution
 
 ### GitHub (recommended)
@@ -207,10 +251,17 @@ Pin to a specific version:
 
 ### Other git services
 
-Any git host works (GitLab, Bitbucket, self-hosted):
+Any git host works (GitLab, Bitbucket, self-hosted). HTTPS and SSH URLs are supported:
 
 ```
 /plugin marketplace add https://gitlab.com/company/plugins.git
+/plugin marketplace add git@gitlab.com:company/plugins.git
+```
+
+To add a specific branch or tag, append `#` followed by the ref:
+
+```
+/plugin marketplace add https://gitlab.com/company/plugins.git#v1.0.0
 ```
 
 ### Private repositories
@@ -269,9 +320,34 @@ Administrators can restrict which marketplaces users can add:
 {
   "strictKnownMarketplaces": [
     { "source": "github", "repo": "acme-corp/approved-plugins" },
+    { "source": "github", "repo": "acme-corp/security-tools", "ref": "v2.0" },
+    { "source": "url", "url": "https://plugins.example.com/marketplace.json" },
     { "source": "hostPattern", "hostPattern": "^github\\.example\\.com$" }
   ]
 }
+```
+
+The allowlist uses exact matching for most source types. For GitHub sources, `repo` is required; `ref` or `path` must also match if specified. For URL sources, the full URL must match exactly. For `hostPattern` sources, the marketplace host is matched against the regex pattern. Because `strictKnownMarketplaces` is set in managed settings, individual users and project configurations cannot override these restrictions.
+
+## Version resolution and release channels
+
+Plugin versions determine cache paths and update detection. You can specify the version in the plugin manifest (`plugin.json`) or in the marketplace entry (`marketplace.json`).
+
+> **Warning**: When possible, avoid setting the version in both places. The plugin manifest always wins silently, which can cause the marketplace version to be ignored. For relative-path plugins, set the version in the marketplace entry. For all other plugin sources, set it in the plugin manifest.
+
+To support "stable" and "latest" release channels, set up two marketplaces that point to different refs/SHAs of the same repo. Assign them to different user groups through managed settings.
+
+> **Important**: The plugin's `plugin.json` must declare a different `version` at each pinned ref or commit. If two refs or commits have the same manifest version, Claude Code treats them as identical and skips the update.
+
+## Auto-updates
+
+Claude Code can automatically update marketplaces and installed plugins at startup. Official Anthropic marketplaces have auto-update enabled by default; third-party and local development marketplaces have auto-update disabled by default. Toggle auto-update per marketplace via `/plugin` > **Marketplaces** > select marketplace > **Enable/Disable auto-update**.
+
+To disable all automatic updates (Claude Code and plugins), set `DISABLE_AUTOUPDATER=true`. To keep plugin auto-updates while disabling Claude Code updates:
+
+```bash
+export DISABLE_AUTOUPDATER=true
+export FORCE_AUTOUPDATE_PLUGINS=true
 ```
 
 ## Validation and testing
@@ -316,3 +392,5 @@ my-marketplace/
 | Files not found after install | Plugins are copied to cache — paths referencing outside plugin directory won't work. Use symlinks or restructure. |
 | Duplicate plugin name error | Each plugin in the marketplace must have a unique `name` |
 | Path traversal not allowed | Source paths cannot contain `..` — use paths relative to marketplace root |
+| npm/pip source warning | These source types may not be fully implemented — use `github` or local path sources instead |
+| Plugin skills not appearing | Clear cache with `rm -rf ~/.claude/plugins/cache`, restart Claude Code, and reinstall the plugin |

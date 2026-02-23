@@ -47,7 +47,8 @@ if [[ -z "$FIELD" ]]; then
 fi
 
 # Extract specific field, stripping surrounding quotes
-VALUE=$(echo "$FRONTMATTER" | grep "^${FIELD}:" | sed "s/${FIELD}: *//" | sed 's/^"\(.*\)"$/\1/' | sed "s/^'\\(.*\\)'$/\\1/")
+# Use awk for exact field matching to avoid regex injection from field names
+VALUE=$(echo "$FRONTMATTER" | awk -v key="$FIELD" 'BEGIN{FS=": "; OFS=": "} $1 == key {sub(/^[^:]*: */, ""); print; exit}' | sed 's/^"\(.*\)"$/\1/' | sed "s/^'\\(.*\\)'$/\\1/")
 
 if [[ -z "$VALUE" ]]; then
   echo "Error: Field '$FIELD' not found in frontmatter" >&2

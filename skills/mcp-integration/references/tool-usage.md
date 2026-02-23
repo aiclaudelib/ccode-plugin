@@ -229,6 +229,28 @@ This agent uses the following Asana MCP tools:
 - The agent needs to adapt its approach based on results
 - Multiple tools may be needed depending on the situation
 
+## MCP Tool Search
+
+When many MCP servers are configured, tool definitions can consume significant context. Claude Code automatically enables Tool Search when MCP tool descriptions exceed 10% of the context window. When active, MCP tools are deferred and loaded on-demand via a search mechanism.
+
+**For MCP server authors**: Add clear server instructions that describe what tasks your tools handle and when Claude should search for them. This helps Tool Search discover the right tools.
+
+**Configuration** (via `ENABLE_TOOL_SEARCH` env var):
+- `auto` (default): Activates when MCP tools exceed 10% of context
+- `auto:<N>`: Custom threshold (e.g., `auto:5` for 5%)
+- `true`: Always enabled
+- `false`: Disabled
+
+Requires Sonnet 4+ or Opus 4+.
+
+## MCP Resources via @ Mentions
+
+MCP servers can expose resources accessible via `@` mentions. Reference resources with `@server:protocol://resource/path` in prompts. Resources are fetched and included as attachments automatically. Multiple resources can be referenced in a single prompt.
+
+## MCP Prompts as Commands
+
+MCP servers can expose prompts available as slash commands: `/mcp__servername__promptname`. Pass arguments space-separated after the command. Prompts are dynamically discovered from connected servers.
+
 ## Tool Call Patterns
 
 ### Pattern 1: Simple Validation + Call

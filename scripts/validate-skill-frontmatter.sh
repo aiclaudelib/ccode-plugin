@@ -23,7 +23,6 @@ if ! command -v jq &>/dev/null; then
   exit 0
 fi
 
-CONTENT=$(cat "$FILE_PATH")
 ERRORS=()
 WARNINGS=()
 
@@ -46,8 +45,19 @@ fi
 # Extract frontmatter (between the two --- lines)
 FRONTMATTER=$(sed -n "2,$((CLOSING_LINE))p" "$FILE_PATH")
 
+# --- Valid frontmatter fields for skills ---
+VALID_FIELDS="name description argument-hint disable-model-invocation user-invocable allowed-tools model context agent hooks"
+
+# Check for unknown top-level fields
+FIELD_NAMES=$(echo "$FRONTMATTER" | grep -E "^[a-zA-Z]" | sed 's/:.*//' | tr -d ' ' || true)
+for field in $FIELD_NAMES; do
+  if ! echo "$VALID_FIELDS" | grep -qw "$field"; then
+    WARNINGS+=("Unknown frontmatter field: '$field'. Valid fields: $VALID_FIELDS")
+  fi
+done
+
 # Extract name field
-NAME=$(echo "$FRONTMATTER" | grep -E "^name:" | sed 's/^name:\s*//' | tr -d '"' | tr -d "'" | xargs)
+NAME=$(echo "$FRONTMATTER" | grep -E "^name:" | sed 's/^name:[[:space:]]*//' | tr -d '"' | tr -d "'" | xargs || true)
 
 # Validate name if present
 if [[ -n "$NAME" ]]; then
@@ -61,16 +71,40 @@ if [[ -n "$NAME" ]]; then
     ERRORS+=("name must contain only lowercase letters, numbers, and hyphens (got '$NAME')")
   fi
 
-  # Check reserved words
-  if echo "$NAME" | grep -iqE "(anthropic|claude)"; then
+  # Check reserved words (whole-word match only)
+  if echo "$NAME" | grep -iqE "^(anthropic|claude)$|-(anthropic|claude)-|^(anthropic|claude)-|-(anthropic|claude)$"; then
     ERRORS+=("name cannot contain reserved words 'anthropic' or 'claude' (got '$NAME')")
   fi
 fi
 
-# Check description field
-DESCRIPTION=$(echo "$FRONTMATTER" | grep -E "^description:" | sed 's/^description:\s*//')
+# Check description field (recommended, not required)
+DESCRIPTION=$(echo "$FRONTMATTER" | grep -E "^description:" | sed 's/^description:[[:space:]]*//' || true)
 if [[ -z "$DESCRIPTION" ]]; then
-  ERRORS+=("description field is required in frontmatter")
+  WARNINGS+=("description field is recommended in frontmatter (Claude uses it to decide when to apply the skill)")
+fi
+
+# Validate disable-model-invocation (must be boolean)
+DMI=$(echo "$FRONTMATTER" | grep -E "^disable-model-invocation:" | sed 's/^disable-model-invocation:[[:space:]]*//' || true)
+if [[ -n "$DMI" ]] && [[ "$DMI" != "true" ]] && [[ "$DMI" != "false" ]]; then
+  ERRORS+=("disable-model-invocation must be 'true' or 'false' (got '$DMI')")
+fi
+
+# Validate user-invocable (must be boolean)
+UI=$(echo "$FRONTMATTER" | grep -E "^user-invocable:" | sed 's/^user-invocable:[[:space:]]*//' || true)
+if [[ -n "$UI" ]] && [[ "$UI" != "true" ]] && [[ "$UI" != "false" ]]; then
+  ERRORS+=("user-invocable must be 'true' or 'false' (got '$UI')")
+fi
+
+# Validate context field (only valid value is 'fork')
+CTX=$(echo "$FRONTMATTER" | grep -E "^context:" | sed 's/^context:[[:space:]]*//' || true)
+if [[ -n "$CTX" ]] && [[ "$CTX" != "fork" ]]; then
+  ERRORS+=("context must be 'fork' (got '$CTX')")
+fi
+
+# Validate agent field (only meaningful with context: fork)
+AGENT=$(echo "$FRONTMATTER" | grep -E "^agent:" | sed 's/^agent:[[:space:]]*//' || true)
+if [[ -n "$AGENT" ]] && [[ -z "$CTX" ]]; then
+  WARNINGS+=("agent field is set but context is not 'fork'. The agent field only applies when context: fork is set.")
 fi
 
 # Check body length (warning only)

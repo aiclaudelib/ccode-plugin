@@ -49,7 +49,7 @@ Purpose: send notifications to coordinator when agent becomes idle.
 #!/bin/bash
 set -euo pipefail
 
-SWARM_STATE_FILE=".claude/multi-agent-swarm.local.md"
+SWARM_STATE_FILE="$CLAUDE_PROJECT_DIR/.claude/multi-agent-swarm.local.md"
 
 # Quick exit if no swarm active
 if [[ ! -f "$SWARM_STATE_FILE" ]]; then
@@ -153,7 +153,7 @@ Purpose: prevent session exit and loop Claude's output back as input.
 #!/bin/bash
 set -euo pipefail
 
-RALPH_STATE_FILE=".claude/ralph-loop.local.md"
+RALPH_STATE_FILE="$CLAUDE_PROJECT_DIR/.claude/ralph-loop.local.md"
 
 # Quick exit if no active loop
 if [[ ! -f "$RALPH_STATE_FILE" ]]; then

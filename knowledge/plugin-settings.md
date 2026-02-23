@@ -1,14 +1,24 @@
 # Plugin settings guide
 
-Plugins can store user-configurable settings and state in `.claude/plugin-name.local.md` files within the project directory. This pattern uses YAML frontmatter for structured configuration and markdown content for prompts or additional context. For advanced parsing techniques and production examples, see the plugin-dev plugin-settings skill and its references.
+## Official plugin settings vs local settings files
 
-## Core concepts
+Claude Code plugins support an **official** `settings.json` file at the plugin root that provides default configuration when the plugin is enabled. Currently, only `agent` settings are supported in this file. See the [official plugin structure](#official-plugin-settingsjson) section below.
+
+For **user-configurable per-project settings and state**, plugins use `.claude/plugin-name.local.md` files within the project directory. This is a community-established pattern (not a built-in Claude Code feature) that uses YAML frontmatter for structured configuration and markdown content for prompts or additional context. For advanced parsing techniques and production examples, see the plugin-dev plugin-settings skill and its references.
+
+## Official plugin settings.json
+
+Plugins can include a `settings.json` at the plugin root directory. This file provides default configuration that is applied when the plugin is enabled. Currently only [`agent`](https://code.claude.com/docs/en/sub-agents) settings are supported. This is part of the official plugin structure defined in the Claude Code plugin manifest schema.
+
+## Local settings files (.local.md pattern)
+
+### Core concepts
 
 - **Location**: `.claude/plugin-name.local.md` in the project root
 - **Structure**: YAML frontmatter (between `---` markers) + optional markdown body
 - **Scope**: Per-project, per-user (not committed to git)
 - **Consumers**: Hooks, commands, agents, and skills can all read settings
-- **Lifecycle**: User-managed; changes require Claude Code restart for hooks to pick them up
+- **Lifecycle**: User-managed; hooks are snapshotted at session startup, so changes require either restarting Claude Code or reviewing changes via the `/hooks` menu mid-session
 
 ## File structure
 
@@ -63,6 +73,13 @@ YAML allows both quoted and unquoted strings (`field: value` and `field: "value"
 
 ## Reading settings from hooks
 
+### Environment variables for paths
+
+Use these environment variables in hook scripts for reliable path resolution:
+
+- **`$CLAUDE_PROJECT_DIR`**: the project root directory. Always wrap in quotes to handle paths with spaces.
+- **`${CLAUDE_PLUGIN_ROOT}`**: the plugin's root directory, for scripts bundled with a plugin.
+
 ### Quick-exit pattern
 
 Every hook that reads settings should start with a file-existence check. This ensures the hook does nothing when the plugin is not configured for the project:
@@ -71,7 +88,7 @@ Every hook that reads settings should start with a file-existence check. This en
 #!/bin/bash
 set -euo pipefail
 
-STATE_FILE=".claude/my-plugin.local.md"
+STATE_FILE="$CLAUDE_PROJECT_DIR/.claude/my-plugin.local.md"
 
 # Quick exit if not configured
 if [[ ! -f "$STATE_FILE" ]]; then
@@ -455,14 +472,13 @@ Add to `.gitignore` (document in plugin README):
 
 ### Restart requirement
 
-Settings changes require a Claude Code restart. Hooks cannot be hot-swapped within a session. Document this clearly:
+Claude Code snapshots hooks at session startup. Changes to settings files that affect hook behavior require either restarting Claude Code or reviewing changes via the `/hooks` menu. If hooks are modified externally during a session, Claude Code detects the change and warns you, requiring review in the `/hooks` menu before changes apply. Document this clearly:
 
 ```markdown
 After editing `.claude/my-plugin.local.md`:
 1. Save the file
-2. Exit Claude Code
-3. Restart Claude Code
-4. New settings will be active
+2. Either restart Claude Code, or open the `/hooks` menu to review and apply changes
+3. New settings will be active
 ```
 
 ### Security
@@ -500,7 +516,7 @@ A full settings-reading hook combining all best practices:
 #!/bin/bash
 set -euo pipefail
 
-SETTINGS_FILE=".claude/my-plugin.local.md"
+SETTINGS_FILE="$CLAUDE_PROJECT_DIR/.claude/my-plugin.local.md"
 
 # Quick exit if not configured
 if [[ ! -f "$SETTINGS_FILE" ]]; then
@@ -543,12 +559,57 @@ case "$MODE" in
 esac
 ```
 
+## Hook types and events reference
+
+### Hook types
+
+Hooks support three handler types:
+
+| Type | Description | Use case |
+|---|---|---|
+| `command` | Execute a shell command or script | Most common; reads stdin JSON, returns exit code and optional JSON stdout |
+| `prompt` | Send a prompt to an LLM for single-turn evaluation | Quick yes/no decisions without writing scripts |
+| `agent` | Spawn a subagent with tool access (Read, Grep, Glob) for multi-turn verification | Complex verification that requires inspecting files or running searches |
+
+### Available hook events
+
+| Event | When it fires | Can block? |
+|---|---|---|
+| `SessionStart` | Session begins or resumes | No |
+| `UserPromptSubmit` | User submits a prompt | Yes |
+| `PreToolUse` | Before a tool call executes | Yes |
+| `PermissionRequest` | Permission dialog appears | Yes |
+| `PostToolUse` | After a tool call succeeds | No (tool already ran) |
+| `PostToolUseFailure` | After a tool call fails | No |
+| `Notification` | Claude Code sends a notification | No |
+| `SubagentStart` | A subagent is spawned | No |
+| `SubagentStop` | A subagent finishes | Yes |
+| `Stop` | Claude finishes responding | Yes |
+| `TeammateIdle` | Agent team teammate about to go idle | Yes |
+| `TaskCompleted` | Task being marked as completed | Yes |
+| `ConfigChange` | Configuration file changes during session | Yes (except policy_settings) |
+| `WorktreeCreate` | Worktree being created (replaces default git behavior) | Yes (non-zero exit fails creation) |
+| `WorktreeRemove` | Worktree being removed | No |
+| `PreCompact` | Before context compaction | No |
+| `SessionEnd` | Session terminates | No |
+
+Not all events support all hook types. `prompt` and `agent` types are supported for: `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `PermissionRequest`, `UserPromptSubmit`, `Stop`, `SubagentStop`, `TaskCompleted`. All other events only support `command` type.
+
+### Key environment variables for hooks
+
+| Variable | Description |
+|---|---|
+| `$CLAUDE_PROJECT_DIR` | Project root directory |
+| `${CLAUDE_PLUGIN_ROOT}` | Plugin root directory (for plugin-bundled scripts) |
+| `$CLAUDE_ENV_FILE` | File path for persisting env vars (SessionStart hooks only) |
+| `$CLAUDE_CODE_REMOTE` | Set to `"true"` in remote web environments |
+
 ## Troubleshooting
 
 | Problem | Solution |
 |---|---|
 | Hook not reading settings | Check file path matches `.claude/plugin-name.local.md` exactly |
-| Settings changes not applied | Restart Claude Code (hooks require restart) |
+| Settings changes not applied | Restart Claude Code or review changes via the `/hooks` menu |
 | Frontmatter parse errors | Verify file starts with `---` on first line, no leading whitespace |
 | Empty field values | Use `${VAR:-default}` bash syntax for fallback defaults |
 | Quotes in values | Strip with `sed 's/^"\(.*\)"$/\1/'` -- handles both quoted and unquoted |

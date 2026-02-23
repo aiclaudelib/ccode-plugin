@@ -16,6 +16,11 @@ Hooks are user-defined shell commands, LLM prompts, or agent evaluations that ex
 | `SubagentStart` | Subagent spawned | No |
 | `SubagentStop` | Subagent finishes | Yes |
 | `Stop` | Claude finishes responding | Yes |
+| `TeammateIdle` | Agent team teammate about to go idle | Yes (exit 2) |
+| `TaskCompleted` | Task being marked completed | Yes (exit 2) |
+| `ConfigChange` | Configuration file changes during session | Yes (exit 2 or JSON block) |
+| `WorktreeCreate` | Worktree being created (replaces default git) | Yes (non-zero exit fails) |
+| `WorktreeRemove` | Worktree being removed | No |
 | `PreCompact` | Before compaction | No |
 | `SessionEnd` | Session terminates | No |
 
@@ -52,28 +57,31 @@ Hooks are user-defined shell commands, LLM prompts, or agent evaluations that ex
 | `~/.claude/settings.json` | All your projects |
 | `.claude/settings.json` | Single project (committable) |
 | `.claude/settings.local.json` | Single project (gitignored) |
+| Managed policy settings | Organization-wide (admin-controlled) |
 | Plugin `hooks/hooks.json` | When plugin enabled |
 | Skill/agent frontmatter | While component active |
 
 ## Input and output
 
-**Input**: JSON on stdin with `session_id`, `cwd`, `hook_event_name`, plus event-specific fields (`tool_name`, `tool_input` for tool events, `prompt` for UserPromptSubmit, etc.).
+**Input**: JSON on stdin with `session_id`, `transcript_path`, `cwd`, `permission_mode`, `hook_event_name`, plus event-specific fields (`tool_name`, `tool_input` for tool events, `prompt` for UserPromptSubmit, etc.).
 
 **Exit codes**: 0 = proceed (stdout parsed for JSON), 2 = block (stderr fed to Claude), other = non-blocking error.
 
-**JSON output** (exit 0): For `PreToolUse`, use `hookSpecificOutput` with `permissionDecision` (`allow`/`deny`/`ask`). For `PostToolUse`/`Stop`, use top-level `decision: "block"` + `reason`.
+**JSON output** (exit 0): For `PreToolUse`, use `hookSpecificOutput` with `permissionDecision` (`allow`/`deny`/`ask`). For `PostToolUse`/`Stop`/`SubagentStop`/`ConfigChange`, use top-level `decision: "block"` + `reason`. For `TeammateIdle`/`TaskCompleted`, use exit codes only (no JSON decision control).
 
 ## Matchers
 
 | Event | What matcher filters | Examples |
 |---|---|---|
 | Tool events (`Pre/Post/Failure/Permission`) | Tool name | `Bash`, `Edit\|Write`, `mcp__.*` |
-| `SessionStart` | How session started | `startup`, `resume`, `compact` |
-| `SessionEnd` | Why session ended | `clear`, `logout`, `other` |
-| `Notification` | Notification type | `permission_prompt`, `idle_prompt` |
-| `SubagentStart`/`Stop` | Agent type | `Bash`, `Explore`, custom names |
+| `SessionStart` | How session started | `startup`, `resume`, `clear`, `compact` |
+| `SessionEnd` | Why session ended | `clear`, `logout`, `prompt_input_exit`, `bypass_permissions_disabled`, `other` |
+| `Notification` | Notification type | `permission_prompt`, `idle_prompt`, `auth_success`, `elicitation_dialog` |
+| `SubagentStart` | Agent type | `Bash`, `Explore`, `Plan`, custom names |
+| `SubagentStop` | Agent type | same values as `SubagentStart` |
+| `ConfigChange` | Configuration source | `user_settings`, `project_settings`, `local_settings`, `policy_settings`, `skills` |
 | `PreCompact` | Trigger | `manual`, `auto` |
-| `UserPromptSubmit`, `Stop` | No matcher support | Always fires |
+| `UserPromptSubmit`, `Stop`, `TeammateIdle`, `TaskCompleted`, `WorktreeCreate`, `WorktreeRemove` | No matcher support | Always fires |
 
 MCP tools follow naming `mcp__<server>__<tool>`. Match with `mcp__memory__.*`.
 
@@ -86,6 +94,8 @@ MCP tools follow naming `mcp__<server>__<tool>`. Match with `mcp__memory__.*`.
 **Re-inject context after compaction**: `SessionStart` + `compact` matcher + echo context to stdout.
 
 **Desktop notifications**: `Notification` + platform notification command.
+
+**Audit config changes**: `ConfigChange` + logging command to track settings modifications.
 
 ## Stop hook loop prevention
 
@@ -100,7 +110,9 @@ fi
 
 ## Troubleshooting
 
-- **Hook not firing**: Check matcher case-sensitivity, verify event type, check `/hooks` menu
+- **Hook not firing**: Check matcher case-sensitivity, verify event type, check `/hooks` menu. `PermissionRequest` hooks do not fire in non-interactive mode (`-p`); use `PreToolUse` instead
 - **JSON validation failed**: Shell profile `echo` statements interfere — wrap in `if [[ $- == *i* ]]`
 - **Stop hook loops**: Must check `stop_hook_active` field
 - **Debug**: `claude --debug` or toggle verbose mode with `Ctrl+O`
+- **Disable all hooks**: set `"disableAllHooks": true` in settings or use toggle in `/hooks` menu
+- **`CLAUDE_CODE_SIMPLE` env var** (2.1.50): when set, disables hooks, MCP tools, attachments, and `CLAUDE.md` loading entirely. Useful for minimal/embedded environments

@@ -37,8 +37,8 @@ if [[ "$HAS_HOOKS" != "true" ]]; then
   ERRORS+=("hooks.json must contain a top-level 'hooks' key")
 fi
 
-# Valid event names
-VALID_EVENTS="SessionStart UserPromptSubmit PreToolUse PermissionRequest PostToolUse PostToolUseFailure Notification SubagentStart SubagentStop Stop PreCompact SessionEnd"
+# Valid event names (must match hooks-reference-core.md)
+VALID_EVENTS="SessionStart UserPromptSubmit PreToolUse PermissionRequest PostToolUse PostToolUseFailure Notification SubagentStart SubagentStop Stop TeammateIdle TaskCompleted ConfigChange WorktreeCreate WorktreeRemove PreCompact SessionEnd"
 
 # Check event names
 EVENT_NAMES=$(jq -r '.hooks // {} | keys[]' "$FILE_PATH" 2>/dev/null)
@@ -79,6 +79,40 @@ if [[ -n "$INVALID_TYPES" ]]; then
   while IFS= read -r line; do
     ERRORS+=("Invalid hook type in $line (must be 'command', 'prompt', or 'agent')")
   done <<< "$INVALID_TYPES"
+fi
+
+# Check that command hooks have a 'command' field
+MISSING_CMD=$(jq -r '
+  .hooks // {} | to_entries[] |
+  .key as $event |
+  .value[] |
+  .hooks[]? |
+  select(.type == "command") |
+  select(.command == null or .command == "") |
+  $event
+' "$FILE_PATH" 2>/dev/null)
+
+if [[ -n "$MISSING_CMD" ]]; then
+  while IFS= read -r event; do
+    ERRORS+=("Command hook in '$event' is missing required 'command' field")
+  done <<< "$MISSING_CMD"
+fi
+
+# Check that prompt/agent hooks have a 'prompt' field
+MISSING_PROMPT=$(jq -r '
+  .hooks // {} | to_entries[] |
+  .key as $event |
+  .value[] |
+  .hooks[]? |
+  select(.type == "prompt" or .type == "agent") |
+  select(.prompt == null or .prompt == "") |
+  "\($event): \(.type)"
+' "$FILE_PATH" 2>/dev/null)
+
+if [[ -n "$MISSING_PROMPT" ]]; then
+  while IFS= read -r line; do
+    ERRORS+=("Hook of type '${line#*: }' in '${line%%:*}' is missing required 'prompt' field")
+  done <<< "$MISSING_PROMPT"
 fi
 
 # Report errors

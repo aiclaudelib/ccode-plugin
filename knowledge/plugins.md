@@ -14,11 +14,13 @@ Plugins extend Claude Code with skills, agents, hooks, and MCP servers that can 
 ```
 my-plugin/
 ├── .claude-plugin/
-│   └── plugin.json      # Manifest (only file here)
+│   └── plugin.json      # Manifest (only file here, optional)
+├── commands/            # Skills as Markdown files (legacy; use skills/)
 ├── skills/              # Skill directories with SKILL.md
 ├── agents/              # Agent markdown files
 ├── hooks/
 │   └── hooks.json       # Hook configurations
+├── settings.json        # Default settings (optional, only `agent` key supported)
 ├── scripts/             # Hook and utility scripts
 ├── .mcp.json            # MCP server configs (optional)
 └── .lsp.json            # LSP server configs (optional)
@@ -47,7 +49,7 @@ Only `name` is required (kebab-case). Name determines namespace: `/plugin-name:s
 }
 ```
 
-Components at default locations are auto-discovered. Custom path fields (`commands`, `agents`, `skills`, `hooks`, `mcpServers`, `lspServers`) supplement defaults.
+Components at default locations are auto-discovered. Custom path fields (`commands`, `agents`, `skills`, `hooks`, `mcpServers`, `lspServers`) supplement defaults. The `outputStyles` field is **deprecated** since 2.0.30 — use `--system-prompt-file`, CLAUDE.md, or plugins instead.
 
 ### Skills in plugins
 
@@ -71,6 +73,8 @@ Create `hooks/hooks.json` with optional `description`:
 
 Use `${CLAUDE_PLUGIN_ROOT}` for plugin-relative paths.
 
+Hook types: `command` (execute shell commands), `prompt` (evaluate with LLM using `$ARGUMENTS`), `agent` (run agentic verifier with tools).
+
 ### MCP servers
 
 Create `.mcp.json` at plugin root:
@@ -85,6 +89,18 @@ Create `.mcp.json` at plugin root:
   }
 }
 ```
+
+### Default settings
+
+Create `settings.json` at plugin root to apply default configuration when the plugin is enabled. Currently only the `agent` key is supported, which activates a plugin agent as the main thread:
+
+```json
+{
+  "agent": "security-reviewer"
+}
+```
+
+Settings from `settings.json` take priority over `settings` declared in `plugin.json`. Unknown keys are silently ignored.
 
 ## Testing
 

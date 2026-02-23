@@ -14,6 +14,7 @@
 | `claude -c -p "query"`          | Continue via SDK                                       | `claude -c -p "Check for type errors"`            |
 | `claude -r "<session>" "query"` | Resume session by ID or name                           | `claude -r "auth-refactor" "Finish this PR"`      |
 | `claude update`                 | Update to latest version                               | `claude update`                                   |
+| `claude agents`                 | List all configured subagents, grouped by source       | `claude agents`                                   |
 | `claude mcp`                    | Configure Model Context Protocol (MCP) servers         | See the Claude Code MCP documentation. |
 
 ## CLI flags
@@ -49,7 +50,7 @@ Customize Claude Code's behavior with these command-line flags:
 | `--max-budget-usd`                     | Maximum dollar amount to spend on API calls before stopping (print mode only)                                                                                                                             | `claude -p --max-budget-usd 5.00 "query"`                                                          |
 | `--max-turns`                          | Limit the number of agentic turns (print mode only). Exits with an error when the limit is reached. No limit by default                                                                                   | `claude -p --max-turns 3 "query"`                                                                  |
 | `--mcp-config`                         | Load MCP servers from JSON files or strings (space-separated)                                                                                                                                             | `claude --mcp-config ./mcp.json`                                                                   |
-| `--model`                              | Sets the model for the current session with an alias for the latest model (`sonnet` or `opus`) or a model's full name                                                                                     | `claude --model claude-sonnet-4-5-20250929`                                                        |
+| `--model`                              | Sets the model for the current session with an alias for the latest model (`sonnet` or `opus`) or a model's full name                                                                                     | `claude --model claude-sonnet-4-6`                                                        |
 | `--no-chrome`                          | Disable Chrome browser integration for this session                                                                                                                                         | `claude --no-chrome`                                                                               |
 | `--no-session-persistence`             | Disable session persistence so sessions are not saved to disk and cannot be resumed (print mode only)                                                                                                     | `claude -p --no-session-persistence "query"`                                                       |
 | `--output-format`                      | Specify output format for print mode (options: `text`, `json`, `stream-json`)                                                                                                                             | `claude -p "query" --output-format json`                                                           |
@@ -70,6 +71,7 @@ Customize Claude Code's behavior with these command-line flags:
 | `--tools`                              | Restrict which built-in tools Claude can use (works in both interactive and print modes). Use `""` to disable all, `"default"` for all, or tool names like `"Bash,Edit,Read"`                             | `claude --tools "Bash,Edit,Read"`                                                                  |
 | `--verbose`                            | Enable verbose logging, shows full turn-by-turn output (helpful for debugging in both print and interactive modes)                                                                                        | `claude --verbose`                                                                                 |
 | `--version`, `-v`                      | Output the version number                                                                                                                                                                                 | `claude -v`                                                                                        |
+| `--worktree`, `-w`                     | Start Claude in an isolated git worktree at `<repo>/.claude/worktrees/<name>`. If no name is given, one is auto-generated                                                                                 | `claude -w feature-auth`                                                                           |
 
 
   The `--output-format json` flag is particularly useful for scripting and
@@ -80,12 +82,16 @@ Customize Claude Code's behavior with these command-line flags:
 
 The `--agents` flag accepts a JSON object that defines one or more custom subagents. Each subagent requires a unique name (as the key) and a definition object with the following fields:
 
-| Field         | Required | Description                                                                                                                         |
-| :------------ | :------- | :---------------------------------------------------------------------------------------------------------------------------------- |
-| `description` | Yes      | Natural language description of when the subagent should be invoked                                                                 |
-| `prompt`      | Yes      | The system prompt that guides the subagent's behavior                                                                               |
-| `tools`       | No       | Array of specific tools the subagent can use (for example, `["Read", "Edit", "Bash"]`). If omitted, inherits all tools              |
-| `model`       | No       | Model alias to use: `sonnet`, `opus`, `haiku`, or `inherit`. If omitted, defaults to `inherit` (uses the main conversation's model) |
+| Field             | Required | Description                                                                                                                                                           |
+| :---------------- | :------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `description`     | Yes      | Natural language description of when the subagent should be invoked                                                                                                   |
+| `prompt`          | Yes      | The system prompt that guides the subagent's behavior                                                                                                                 |
+| `tools`           | No       | Array of specific tools the subagent can use, for example `["Read", "Edit", "Bash"]`. If omitted, inherits all tools. Supports `Task(agent_type)` syntax              |
+| `disallowedTools` | No       | Array of tool names to explicitly deny for this subagent                                                                                                              |
+| `model`           | No       | Model alias to use: `sonnet`, `opus`, `haiku`, or `inherit`. If omitted, defaults to `inherit` (uses the main conversation's model)                                   |
+| `skills`          | No       | Array of skill names to preload into the subagent's context                                                                                                           |
+| `mcpServers`      | No       | Array of MCP servers for this subagent. Each entry is a server name string or a `{name: config}` object                                                               |
+| `maxTurns`        | No       | Maximum number of agentic turns before the subagent stops                                                                                                             |
 
 Example:
 

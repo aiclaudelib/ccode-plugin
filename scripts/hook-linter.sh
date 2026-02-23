@@ -56,7 +56,7 @@ check_script() {
   fi
 
   # Check 4: Reads from stdin
-  if ! grep -q "cat\|read" "$script"; then
+  if ! grep -Eq "cat|read" "$script"; then
     echo "  WARN: Doesn't appear to read input from stdin"
     ((warnings++)) || true
   fi
@@ -67,8 +67,9 @@ check_script() {
     ((warnings++)) || true
   fi
 
-  # Check 6: Unquoted variables
-  if grep -E '\$[A-Za-z_][A-Za-z0-9_]*[^"]' "$script" | grep -v '#' | grep -q .; then
+  # Check 6: Unquoted variables (best-effort heuristic)
+  # Looks for $VAR not inside double quotes, skipping comments and single-quoted strings
+  if grep -En '^\s*[^#]*[^"]\$[A-Za-z_][A-Za-z0-9_]*\b' "$script" | grep -Ev "'\\\$|#.*\\\$" | grep -q .; then
     echo "  WARN: Potentially unquoted variables detected (injection risk)"
     echo "        Always use double quotes: \"\$variable\" not \$variable"
     ((warnings++)) || true
@@ -93,9 +94,11 @@ check_script() {
   fi
 
   # Check 10: JSON output for decision hooks
-  if grep -q "PreToolUse\|Stop" "$script"; then
-    if ! grep -q "permissionDecision\|decision" "$script"; then
-      echo "  TIP: PreToolUse/Stop hooks should output decision JSON"
+  if grep -Eq "PreToolUse|PostToolUse|Stop|SubagentStop|UserPromptSubmit|PermissionRequest|ConfigChange" "$script"; then
+    if ! grep -Eq "permissionDecision|decision|behavior" "$script"; then
+      echo "  TIP: Decision hooks (PreToolUse, PostToolUse, Stop, SubagentStop,"
+      echo "        UserPromptSubmit, PermissionRequest, ConfigChange) should"
+      echo "        output decision JSON when blocking/modifying behavior"
     fi
   fi
 
@@ -107,7 +110,7 @@ check_script() {
   fi
 
   # Check 12: Error messages to stderr
-  if grep -q 'echo.*".*error\|Error\|denied\|Denied' "$script"; then
+  if grep -Eiq 'echo.*".*\b(error|denied|fail)\b' "$script"; then
     if ! grep -q '>&2' "$script"; then
       echo "  WARN: Error messages should be written to stderr (>&2)"
       ((warnings++)) || true

@@ -9,8 +9,8 @@ Every Claude Code plugin follows this organizational pattern:
 ```
 my-plugin/
 ├── .claude-plugin/
-│   └── plugin.json          # Required: Plugin manifest (only file here)
-├── commands/                 # Slash commands (.md files)
+│   └── plugin.json          # Plugin manifest (only file here, optional)
+├── commands/                 # Skills as Markdown files (legacy; use skills/)
 ├── agents/                   # Subagent definitions (.md files)
 ├── skills/                   # Skills (subdirectories with SKILL.md)
 │   └── skill-name/
@@ -19,6 +19,7 @@ my-plugin/
 ├── hooks/
 │   ├── hooks.json            # Event handler configuration
 │   └── scripts/              # Hook scripts
+├── settings.json             # Default settings (only `agent` key supported)
 ├── .mcp.json                 # MCP server definitions
 ├── .lsp.json                 # LSP server definitions (optional)
 ├── scripts/                  # Shared utility scripts
@@ -26,7 +27,7 @@ my-plugin/
 ```
 
 **Critical rules**:
-1. The manifest (`plugin.json`) MUST be in `.claude-plugin/`
+1. The manifest (`plugin.json`) is optional but if present MUST be in `.claude-plugin/`. If omitted, components are auto-discovered and name derives from directory name.
 2. All component directories (commands, agents, skills, hooks) MUST be at plugin root, NOT inside `.claude-plugin/`
 3. Only create directories for components the plugin actually uses
 4. Use kebab-case for all directory and file names
@@ -112,7 +113,7 @@ Relies entirely on default directory discovery.
 | `license` | string | SPDX identifier (`MIT`, `Apache-2.0`, `GPL-3.0`, etc.) |
 | `keywords` | array | Discovery and categorization tags (5-10 recommended) |
 
-**Version format**: follow semantic versioning. MAJOR for breaking changes, MINOR for new features (backward-compatible), PATCH for bug fixes.
+**Version format**: follow semantic versioning. MAJOR for breaking changes, MINOR for new features (backward-compatible), PATCH for bug fixes. If version is also set in the marketplace entry, `plugin.json` takes priority. You only need to set it in one place.
 
 **Description tips**: focus on what the plugin does, not how. Use active voice. Keep under 200 characters for marketplace display.
 
@@ -127,6 +128,7 @@ Custom paths supplement default directories -- they do not replace them. All pat
 | `skills` | string or array | `./skills` | Additional skill dirs |
 | `hooks` | string or object | `./hooks/hooks.json` | Hook config path or inline |
 | `mcpServers` | string or object | `./.mcp.json` | MCP config path or inline |
+| `outputStyles` | string or array | `./styles/` | Additional output style files/dirs |
 | `lspServers` | string or object | `./.lsp.json` | LSP config path or inline |
 
 **Path rules**:
@@ -242,9 +244,25 @@ Skills activate automatically when task context matches the SKILL.md description
 }
 ```
 
-Available events: PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, Stop, SubagentStart, SubagentStop, SessionStart, SessionEnd, UserPromptSubmit, PreCompact, Notification.
+Available events: PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, Stop, SubagentStart, SubagentStop, SessionStart, SessionEnd, UserPromptSubmit, PreCompact, Notification, TeammateIdle, TaskCompleted.
+
+Hook types: `command` (execute shell commands), `prompt` (evaluate with LLM using `$ARGUMENTS`), `agent` (run agentic verifier with tools).
 
 Hook scripts should be organized in `hooks/scripts/` or `scripts/`. Use `${CLAUDE_PLUGIN_ROOT}` for all script paths.
+
+### Default settings
+
+**Location**: `settings.json` at plugin root
+**Format**: JSON configuration with default settings applied when the plugin is enabled
+**Supported keys**: Only `agent` is currently supported
+
+```json
+{
+  "agent": "security-reviewer"
+}
+```
+
+Setting `agent` activates one of the plugin's custom agents as the main thread, applying its system prompt, tool restrictions, and model. Settings from `settings.json` take priority over `settings` declared in `plugin.json`. Unknown keys are silently ignored.
 
 ### MCP servers
 
@@ -331,13 +349,14 @@ When Claude Code loads a plugin:
 5. Loads `hooks/hooks.json` configuration and registers event handlers
 6. Loads `.mcp.json` MCP server definitions and starts servers
 7. Loads `.lsp.json` LSP server definitions
-8. Loads custom paths from manifest (supplements defaults, does not replace)
+8. Loads `settings.json` default settings
+9. Loads custom paths from manifest (supplements defaults, does not replace)
 
 **Timing**: Component registration happens during Claude Code initialization. Changes take effect on the next session, not during a running session.
 
 **Override behavior**: Custom paths in `plugin.json` add to defaults. Components from all locations load. Name conflicts cause errors.
 
-**Plugin caching**: Plugins are copied to a cache directory (not used in-place). Paths traversing outside the plugin root (`../`) will not work after install. Use symlinks for external dependencies if needed.
+**Plugin caching**: Marketplace plugins are copied to a local cache directory (`~/.claude/plugins/cache`) rather than used in-place. Paths traversing outside the plugin root (`../`) will not work after install. Symlinks are honored during the copy process, so use them for external dependencies if needed.
 
 ## File naming conventions
 
@@ -402,6 +421,7 @@ my-plugin/
 ├── hooks/
 │   ├── hooks.json
 │   └── scripts/
+├── settings.json
 ├── .mcp.json
 ├── .lsp.json
 ├── scripts/

@@ -2,6 +2,7 @@
 set -euo pipefail
 # validate-agent.sh — Validate agent .md files for correct structure and content
 # Checks frontmatter, required fields, name format, description, system prompt
+# Exit 2 on errors (feedback to agent), exit 0 on success/warnings
 
 # Usage
 if [[ $# -eq 0 ]]; then
@@ -9,8 +10,9 @@ if [[ $# -eq 0 ]]; then
   echo ""
   echo "Validates agent file for:"
   echo "  - YAML frontmatter structure"
-  echo "  - Required fields (name, description, model, color)"
-  echo "  - Name format and length (3-50 chars, alphanumeric + hyphens)"
+  echo "  - Required fields (name, description)"
+  echo "  - Optional fields (tools, disallowedTools, model, permissionMode, maxTurns, skills, mcpServers, hooks, memory, background, isolation)"
+  echo "  - Name format (lowercase + hyphens)"
   echo "  - Description quality"
   echo "  - System prompt presence and length"
   exit 1
@@ -24,7 +26,7 @@ echo ""
 # Check 1: File exists
 if [[ ! -f "$AGENT_FILE" ]]; then
   echo "ERROR: File not found: $AGENT_FILE" >&2
-  exit 1
+  exit 2
 fi
 echo "  [ok] File exists"
 
@@ -32,14 +34,14 @@ echo "  [ok] File exists"
 FIRST_LINE=$(head -1 "$AGENT_FILE")
 if [[ "$FIRST_LINE" != "---" ]]; then
   echo "  [FAIL] File must start with YAML frontmatter (---)" >&2
-  exit 1
+  exit 2
 fi
 echo "  [ok] Starts with frontmatter"
 
 # Check 3: Has closing ---
 if ! tail -n +2 "$AGENT_FILE" | grep -q '^---$'; then
   echo "  [FAIL] Frontmatter not closed (missing second ---)" >&2
-  exit 1
+  exit 2
 fi
 echo "  [ok] Frontmatter properly closed"
 
@@ -47,14 +49,26 @@ echo "  [ok] Frontmatter properly closed"
 FRONTMATTER=$(sed -n '/^---$/,/^---$/{ /^---$/d; p; }' "$AGENT_FILE")
 SYSTEM_PROMPT=$(awk '/^---$/{i++; next} i>=2' "$AGENT_FILE")
 
+error_count=0
+warning_count=0
+
+# --- Valid frontmatter fields for agents ---
+VALID_FIELDS="name description tools disallowedTools model permissionMode maxTurns skills mcpServers hooks memory background isolation"
+
+# Check for unknown top-level fields (skip indented lines which are nested YAML)
+FIELD_NAMES=$(echo "$FRONTMATTER" | grep -E "^[a-zA-Z]" | sed 's/:.*//' | tr -d ' ')
+for field in $FIELD_NAMES; do
+  if ! echo "$VALID_FIELDS" | grep -qw "$field"; then
+    echo "  [WARN] Unknown frontmatter field: '$field'. Valid fields: $VALID_FIELDS"
+    ((warning_count++)) || true
+  fi
+done
+
 # Check 4: Required fields
 echo ""
 echo "Checking required fields..."
 
-error_count=0
-warning_count=0
-
-# Check name field
+# Check name field (required)
 NAME=$(echo "$FRONTMATTER" | grep '^name:' | sed 's/name: *//' | sed 's/^"\(.*\)"$/\1/' | sed "s/^'\\(.*\\)'$/\\1/" || true)
 
 if [[ -z "$NAME" ]]; then
@@ -63,19 +77,9 @@ if [[ -z "$NAME" ]]; then
 else
   echo "  [ok] name: $NAME"
 
-  # Validate name format
-  if ! [[ "$NAME" =~ ^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$ ]]; then
-    echo "  [FAIL] name must start/end with alphanumeric, contain only letters, numbers, hyphens"
-    ((error_count++)) || true
-  fi
-
-  # Validate name length
-  name_length=${#NAME}
-  if [[ $name_length -lt 3 ]]; then
-    echo "  [FAIL] name too short (minimum 3 characters)"
-    ((error_count++)) || true
-  elif [[ $name_length -gt 50 ]]; then
-    echo "  [FAIL] name too long (maximum 50 characters)"
+  # Validate name format: lowercase letters, numbers, and hyphens
+  if [[ ! "$NAME" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+    echo "  [FAIL] name must contain only lowercase letters, numbers, and hyphens (got '$NAME')"
     ((error_count++)) || true
   fi
 
@@ -86,7 +90,7 @@ else
   fi
 fi
 
-# Check description field
+# Check description field (required)
 DESCRIPTION=$(echo "$FRONTMATTER" | grep '^description:' | sed 's/description: *//' || true)
 
 if [[ -z "$DESCRIPTION" ]]; then
@@ -105,12 +109,11 @@ else
   fi
 fi
 
-# Check model field
+# Check model field (optional, defaults to inherit)
 MODEL=$(echo "$FRONTMATTER" | grep '^model:' | sed 's/model: *//' || true)
 
 if [[ -z "$MODEL" ]]; then
-  echo "  [FAIL] Missing required field: model"
-  ((error_count++)) || true
+  echo "  [info] model: not specified (defaults to inherit)"
 else
   echo "  [ok] model: $MODEL"
 
@@ -124,22 +127,71 @@ else
   esac
 fi
 
-# Check color field (optional)
-COLOR=$(echo "$FRONTMATTER" | grep '^color:' | sed 's/color: *//' || true)
+# Check permissionMode field (optional)
+PERM_MODE=$(echo "$FRONTMATTER" | grep '^permissionMode:' | sed 's/permissionMode: *//' || true)
 
-if [[ -n "$COLOR" ]]; then
-  echo "  [ok] color: $COLOR"
+if [[ -n "$PERM_MODE" ]]; then
+  echo "  [ok] permissionMode: $PERM_MODE"
 
-  case "$COLOR" in
-    blue|cyan|green|yellow|magenta|red)
+  case "$PERM_MODE" in
+    default|acceptEdits|dontAsk|bypassPermissions|plan)
       ;;
     *)
-      echo "  [WARN] Unknown color: $COLOR (valid: blue, cyan, green, yellow, magenta, red)"
-      ((warning_count++)) || true
+      echo "  [FAIL] Invalid permissionMode: $PERM_MODE (valid: default, acceptEdits, dontAsk, bypassPermissions, plan)"
+      ((error_count++)) || true
       ;;
   esac
-else
-  echo "  [info] color: not specified (optional)"
+fi
+
+# Check maxTurns field (optional, must be positive integer)
+MAX_TURNS=$(echo "$FRONTMATTER" | grep '^maxTurns:' | sed 's/maxTurns: *//' || true)
+
+if [[ -n "$MAX_TURNS" ]]; then
+  if [[ "$MAX_TURNS" =~ ^[0-9]+$ ]] && [[ "$MAX_TURNS" -gt 0 ]]; then
+    echo "  [ok] maxTurns: $MAX_TURNS"
+  else
+    echo "  [FAIL] maxTurns must be a positive integer (got '$MAX_TURNS')"
+    ((error_count++)) || true
+  fi
+fi
+
+# Check memory field (optional)
+MEMORY=$(echo "$FRONTMATTER" | grep '^memory:' | sed 's/memory: *//' || true)
+
+if [[ -n "$MEMORY" ]]; then
+  case "$MEMORY" in
+    user|project|local)
+      echo "  [ok] memory: $MEMORY"
+      ;;
+    *)
+      echo "  [FAIL] Invalid memory scope: $MEMORY (valid: user, project, local)"
+      ((error_count++)) || true
+      ;;
+  esac
+fi
+
+# Check background field (optional, must be boolean)
+BACKGROUND=$(echo "$FRONTMATTER" | grep '^background:' | sed 's/background: *//' || true)
+
+if [[ -n "$BACKGROUND" ]]; then
+  if [[ "$BACKGROUND" == "true" ]] || [[ "$BACKGROUND" == "false" ]]; then
+    echo "  [ok] background: $BACKGROUND"
+  else
+    echo "  [FAIL] background must be 'true' or 'false' (got '$BACKGROUND')"
+    ((error_count++)) || true
+  fi
+fi
+
+# Check isolation field (optional)
+ISOLATION=$(echo "$FRONTMATTER" | grep '^isolation:' | sed 's/isolation: *//' || true)
+
+if [[ -n "$ISOLATION" ]]; then
+  if [[ "$ISOLATION" == "worktree" ]]; then
+    echo "  [ok] isolation: $ISOLATION"
+  else
+    echo "  [FAIL] Invalid isolation value: $ISOLATION (valid: worktree)"
+    ((error_count++)) || true
+  fi
 fi
 
 # Check tools field (optional)
@@ -149,6 +201,13 @@ if [[ -n "$TOOLS" ]]; then
   echo "  [ok] tools: $TOOLS"
 else
   echo "  [info] tools: not specified (agent has access to all tools)"
+fi
+
+# Check disallowedTools field (optional)
+DISALLOWED=$(echo "$FRONTMATTER" | grep '^disallowedTools:' | sed 's/disallowedTools: *//' || true)
+
+if [[ -n "$DISALLOWED" ]]; then
+  echo "  [ok] disallowedTools: $DISALLOWED"
 fi
 
 # Check 5: System prompt
@@ -193,5 +252,5 @@ elif [[ $error_count -eq 0 ]]; then
   exit 0
 else
   echo "Failed with $error_count error(s) and $warning_count warning(s)"
-  exit 1
+  exit 2
 fi

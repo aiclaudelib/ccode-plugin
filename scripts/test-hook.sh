@@ -19,8 +19,12 @@ show_usage() {
   echo "Create sample test input with:"
   echo "  $0 --create-sample <event-type>"
   echo ""
-  echo "Event types: PreToolUse, PostToolUse, Stop, SubagentStop,"
-  echo "  UserPromptSubmit, SessionStart, SessionEnd"
+  echo "Event types:"
+  echo "  SessionStart, SessionEnd, UserPromptSubmit, PreToolUse,"
+  echo "  PostToolUse, PostToolUseFailure, Stop, SubagentStart,"
+  echo "  SubagentStop, PreCompact, Notification, PermissionRequest,"
+  echo "  TeammateIdle, TaskCompleted, ConfigChange, WorktreeCreate,"
+  echo "  WorktreeRemove"
   exit 0
 }
 
@@ -28,16 +32,45 @@ show_usage() {
 create_sample() {
   local event_type="$1"
 
+  # Common fields shared by all events
+  local common='"session_id": "test-session", "transcript_path": "/tmp/transcript.txt", "cwd": "/tmp/test-project", "permission_mode": "ask"'
+
   case "$event_type" in
-    PreToolUse)
-      cat <<'EOF'
+    SessionStart)
+      cat <<EOF
 {
-  "session_id": "test-session",
-  "transcript_path": "/tmp/transcript.txt",
-  "cwd": "/tmp/test-project",
-  "permission_mode": "ask",
+  ${common},
+  "hook_event_name": "SessionStart",
+  "source": "startup",
+  "model": "claude-sonnet-4-6"
+}
+EOF
+      ;;
+    SessionEnd)
+      cat <<EOF
+{
+  ${common},
+  "hook_event_name": "SessionEnd",
+  "reason": "prompt_input_exit"
+}
+EOF
+      ;;
+    UserPromptSubmit)
+      cat <<EOF
+{
+  ${common},
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "Test user prompt"
+}
+EOF
+      ;;
+    PreToolUse)
+      cat <<EOF
+{
+  ${common},
   "hook_event_name": "PreToolUse",
   "tool_name": "Write",
+  "tool_use_id": "toolu_test_001",
   "tool_input": {
     "file_path": "/tmp/test.txt",
     "content": "Test content"
@@ -45,57 +78,158 @@ create_sample() {
 }
 EOF
       ;;
-    PostToolUse)
-      cat <<'EOF'
+    PermissionRequest)
+      cat <<EOF
 {
-  "session_id": "test-session",
-  "transcript_path": "/tmp/transcript.txt",
-  "cwd": "/tmp/test-project",
-  "permission_mode": "ask",
+  ${common},
+  "hook_event_name": "PermissionRequest",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "rm -rf node_modules"
+  },
+  "permission_suggestions": [{ "type": "toolAlwaysAllow", "tool": "Bash" }]
+}
+EOF
+      ;;
+    PostToolUse)
+      cat <<EOF
+{
+  ${common},
   "hook_event_name": "PostToolUse",
   "tool_name": "Bash",
-  "tool_result": "Command executed successfully"
+  "tool_use_id": "toolu_test_002",
+  "tool_input": {
+    "command": "echo hello"
+  },
+  "tool_response": "hello"
 }
 EOF
       ;;
-    Stop|SubagentStop)
-      cat <<'EOF'
+    PostToolUseFailure)
+      cat <<EOF
 {
-  "session_id": "test-session",
-  "transcript_path": "/tmp/transcript.txt",
-  "cwd": "/tmp/test-project",
-  "permission_mode": "ask",
+  ${common},
+  "hook_event_name": "PostToolUseFailure",
+  "tool_name": "Bash",
+  "tool_use_id": "toolu_test_003",
+  "tool_input": {
+    "command": "exit 1"
+  },
+  "error": "Command exited with non-zero status: 1"
+}
+EOF
+      ;;
+    Stop)
+      cat <<EOF
+{
+  ${common},
   "hook_event_name": "Stop",
-  "reason": "Task appears complete"
+  "stop_hook_active": false,
+  "last_assistant_message": "I have completed the requested changes."
 }
 EOF
       ;;
-    UserPromptSubmit)
-      cat <<'EOF'
+    SubagentStart)
+      cat <<EOF
 {
-  "session_id": "test-session",
-  "transcript_path": "/tmp/transcript.txt",
-  "cwd": "/tmp/test-project",
-  "permission_mode": "ask",
-  "hook_event_name": "UserPromptSubmit",
-  "user_prompt": "Test user prompt"
+  ${common},
+  "hook_event_name": "SubagentStart",
+  "agent_id": "agent-test-001",
+  "agent_type": "Bash"
 }
 EOF
       ;;
-    SessionStart|SessionEnd)
-      cat <<'EOF'
+    SubagentStop)
+      cat <<EOF
 {
-  "session_id": "test-session",
-  "transcript_path": "/tmp/transcript.txt",
-  "cwd": "/tmp/test-project",
-  "permission_mode": "ask",
-  "hook_event_name": "SessionStart"
+  ${common},
+  "hook_event_name": "SubagentStop",
+  "stop_hook_active": false,
+  "agent_id": "agent-test-001",
+  "agent_type": "Bash",
+  "agent_transcript_path": "/tmp/agent-transcript.txt",
+  "last_assistant_message": "Subagent task completed."
+}
+EOF
+      ;;
+    PreCompact)
+      cat <<EOF
+{
+  ${common},
+  "hook_event_name": "PreCompact",
+  "trigger": "manual",
+  "custom_instructions": "Focus on architecture decisions"
+}
+EOF
+      ;;
+    Notification)
+      cat <<EOF
+{
+  ${common},
+  "hook_event_name": "Notification",
+  "message": "Claude is waiting for your input",
+  "title": "Idle prompt",
+  "notification_type": "idle_prompt"
+}
+EOF
+      ;;
+    TeammateIdle)
+      cat <<EOF
+{
+  ${common},
+  "hook_event_name": "TeammateIdle",
+  "teammate_name": "backend-dev",
+  "team_name": "feature-team"
+}
+EOF
+      ;;
+    TaskCompleted)
+      cat <<EOF
+{
+  ${common},
+  "hook_event_name": "TaskCompleted",
+  "task_id": "task-001",
+  "task_subject": "Implement login page",
+  "task_description": "Create a responsive login page with OAuth support",
+  "teammate_name": "frontend-dev",
+  "team_name": "feature-team"
+}
+EOF
+      ;;
+    ConfigChange)
+      cat <<EOF
+{
+  ${common},
+  "hook_event_name": "ConfigChange",
+  "source": "project_settings",
+  "file_path": "/tmp/test-project/.claude/settings.json"
+}
+EOF
+      ;;
+    WorktreeCreate)
+      cat <<EOF
+{
+  ${common},
+  "hook_event_name": "WorktreeCreate",
+  "name": "feature-branch-worktree"
+}
+EOF
+      ;;
+    WorktreeRemove)
+      cat <<EOF
+{
+  ${common},
+  "hook_event_name": "WorktreeRemove",
+  "worktree_path": "/tmp/worktrees/feature-branch-worktree"
 }
 EOF
       ;;
     *)
       echo "Unknown event type: $event_type" >&2
-      echo "Valid types: PreToolUse, PostToolUse, Stop, SubagentStop, UserPromptSubmit, SessionStart, SessionEnd" >&2
+      echo "Valid types: SessionStart, SessionEnd, UserPromptSubmit, PreToolUse," >&2
+      echo "  PostToolUse, PostToolUseFailure, Stop, SubagentStart, SubagentStop," >&2
+      echo "  PreCompact, Notification, PermissionRequest, TeammateIdle," >&2
+      echo "  TaskCompleted, ConfigChange, WorktreeCreate, WorktreeRemove" >&2
       exit 1
       ;;
   esac
@@ -195,6 +329,14 @@ if [[ "$VERBOSE" == "true" ]]; then
   echo ""
 fi
 
+# Detect timeout command (GNU coreutils vs macOS)
+TIMEOUT_CMD=""
+if command -v timeout &>/dev/null; then
+  TIMEOUT_CMD="timeout"
+elif command -v gtimeout &>/dev/null; then
+  TIMEOUT_CMD="gtimeout"
+fi
+
 # Run the hook
 echo "Running hook (timeout: ${TIMEOUT}s)..."
 echo ""
@@ -202,7 +344,12 @@ echo ""
 start_time=$(date +%s)
 
 set +e
-output=$(timeout "$TIMEOUT" bash -c "cat '$TEST_INPUT' | $RUN_CMD" 2>&1)
+if [[ -n "$TIMEOUT_CMD" ]]; then
+  output=$("$TIMEOUT_CMD" "$TIMEOUT" bash -c "cat '$TEST_INPUT' | $RUN_CMD" 2>&1)
+else
+  echo "Warning: timeout/gtimeout not found, running without timeout" >&2
+  output=$(bash -c "cat '$TEST_INPUT' | $RUN_CMD" 2>&1)
+fi
 exit_code=$?
 set -e
 

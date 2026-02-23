@@ -6,9 +6,15 @@ Detailed reference for all plugin source types in marketplace.json.
 
 | Source type | Format | Use case | Works with URL-based marketplace? |
 |---|---|---|---|
-| Relative path | string | Plugins in the same repository | No (git-based only) |
+| Relative path | string (must start with `./`) | Plugins in the same repository | No (git-based only) |
 | GitHub | object | Plugins hosted on GitHub | Yes |
 | Git URL | object | Plugins on GitLab, Bitbucket, or self-hosted git | Yes |
+| npm | object | Plugins published as npm packages | Yes |
+| pip | object | Plugins published as pip packages | Yes |
+
+> **Marketplace sources vs plugin sources**: These are different concepts. **Marketplace source** is where to fetch the `marketplace.json` catalog (set via `/plugin marketplace add` or `extraKnownMarketplaces`; supports `ref` but not `sha`). **Plugin source** is where to fetch an individual plugin listed in the marketplace (set in the `source` field of each plugin entry; supports both `ref` and `sha`).
+
+Once a plugin is cloned or copied, it is stored in the local versioned plugin cache at `~/.claude/plugins/cache`.
 
 ## Relative paths
 
@@ -22,7 +28,7 @@ Simplest option for monorepo marketplaces where plugins live alongside the marke
 ```
 
 **Rules**:
-- Must be relative to the marketplace repository root
+- Must start with `./` and be relative to the marketplace repository root
 - Cannot use `../` (path traversal is blocked)
 - Only works when users add the marketplace via Git (not URL-based)
 
@@ -33,6 +39,20 @@ Simplest option for monorepo marketplaces where plugins live alongside the marke
   "plugins": [
     { "name": "a", "source": "a" },
     { "name": "b", "source": "b" }
+  ]
+}
+```
+
+**Important**: `pluginRoot` only works with simple names (no path separators). It does NOT work with categorized directory structures:
+- `"source": "formatter"` with `pluginRoot: "./plugins"` → resolves to `./plugins/formatter` (correct)
+- `"source": "./utility/ccode"` with `pluginRoot: "./plugins"` → resolves to `./utility/ccode`, ignoring `pluginRoot` (the `./` prefix makes it an explicit relative path from the marketplace root)
+- `"source": "utility/ccode"` with `pluginRoot: "./plugins"` → fails schema validation (`Invalid input`)
+
+For nested category structures (e.g., `plugins/utility/ccode`), skip `pluginRoot` and use full explicit paths:
+```json
+{
+  "plugins": [
+    { "name": "my-tool", "source": "./plugins/utility/my-tool" }
   ]
 }
 ```
@@ -116,6 +136,84 @@ For plugins on GitLab, Bitbucket, self-hosted Gitea, or any git server.
 | `ref` | string | No | Git branch or tag (defaults to repository default branch) |
 | `sha` | string | No | Full 40-character git commit SHA for exact version pinning |
 
+## npm packages
+
+For plugins published as npm packages.
+
+### Basic
+
+```json
+{
+  "name": "npm-plugin",
+  "source": {
+    "source": "npm",
+    "package": "my-claude-plugin"
+  }
+}
+```
+
+### With version pinning
+
+```json
+{
+  "name": "npm-plugin",
+  "source": {
+    "source": "npm",
+    "package": "my-claude-plugin",
+    "version": "1.0.0",
+    "registry": "https://npm.company.com"
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `source` | string | Yes | Must be `"npm"` |
+| `package` | string | Yes | npm package name |
+| `version` | string | No | Semver version or range |
+| `registry` | string | No | Custom npm registry URL |
+
+> **Note**: npm source may not yet be fully implemented. Prefer `github` or local path sources for production use.
+
+## pip packages
+
+For plugins published as Python pip packages.
+
+### Basic
+
+```json
+{
+  "name": "pip-plugin",
+  "source": {
+    "source": "pip",
+    "package": "my-claude-plugin"
+  }
+}
+```
+
+### With version pinning
+
+```json
+{
+  "name": "pip-plugin",
+  "source": {
+    "source": "pip",
+    "package": "my-claude-plugin",
+    "version": "1.0.0",
+    "registry": "https://pypi.company.com/simple"
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `source` | string | Yes | Must be `"pip"` |
+| `package` | string | Yes | pip package name |
+| `version` | string | No | Version specifier |
+| `registry` | string | No | Custom PyPI registry URL |
+
+> **Note**: pip source may not yet be fully implemented. Prefer `github` or local path sources for production use.
+
 ## Hosting and distribution
 
 ### GitHub (recommended)
@@ -128,8 +226,17 @@ Easiest distribution: push marketplace repo to GitHub, users add with:
 
 ### Other git services
 
+HTTPS and SSH URLs are supported:
+
 ```
 /plugin marketplace add https://gitlab.com/company/plugins.git
+/plugin marketplace add git@gitlab.com:company/plugins.git
+```
+
+To add a specific branch or tag, append `#` followed by the ref:
+
+```
+/plugin marketplace add https://gitlab.com/company/plugins.git#v1.0.0
 ```
 
 ### Local testing

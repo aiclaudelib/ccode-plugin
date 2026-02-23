@@ -6,8 +6,8 @@ set -euo pipefail
 
 KNOWLEDGE_DIR="${1:-$(dirname "$0")/../knowledge}"
 
-for file in "$KNOWLEDGE_DIR"/*.md; do
-  [ -f "$file" ] || continue
+# Use find to recurse into subdirectories (e.g., archive/)
+while IFS= read -r file; do
   echo "Cleaning: $(basename "$file")"
 
   # 1. Remove Documentation Index headers (3 lines)
@@ -24,8 +24,10 @@ for file in "$KNOWLEDGE_DIR"/*.md; do
   # 4. Convert <Tabs><Tab title="X"> to #### sections
   perl -i -pe 's/<Tabs>\s*$//; s/<\/Tabs>\s*$//; s/<Tab title="([^"]*)">/\n#### $1\n/; s/<\/Tab>\s*$//' "$file"
 
-  # 5. Remove <Frame> and </Frame>
-  perl -i -pe 's/<Frame>\s*$//; s/<\/Frame>\s*$//' "$file"
+  # 5. Remove <Frame>, </Frame>, <CodeGroup>, </CodeGroup>
+  perl -i -pe 's/<Frame>\s*$//; s/<\/Frame>\s*$//; s/<CodeGroup>\s*$//; s/<\/CodeGroup>\s*$//' "$file"
+  # Handle inline versions
+  perl -i -pe 's/<Frame>//g; s/<\/Frame>//g; s/<CodeGroup>//g; s/<\/CodeGroup>//g' "$file"
 
   # 6. Remove <div style={{...}}> and </div>
   perl -i -pe 's/<div style=\{\{[^}]*\}\}>\s*$//; s/<\/div>\s*$//' "$file"
@@ -44,6 +46,6 @@ for file in "$KNOWLEDGE_DIR"/*.md; do
 
   # 11. Clean up multiple blank lines (max 2)
   perl -i -0pe 's/\n{4,}/\n\n\n/g' "$file"
-done
+done < <(find "$KNOWLEDGE_DIR" -name '*.md' -type f)
 
 echo "Done. Review results manually."

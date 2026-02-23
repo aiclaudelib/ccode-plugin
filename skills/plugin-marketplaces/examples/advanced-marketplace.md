@@ -142,12 +142,23 @@ Lock users to only approved marketplaces:
       "repo": "company/company-marketplace"
     },
     {
+      "source": "github",
+      "repo": "company/security-tools",
+      "ref": "v2.0"
+    },
+    {
+      "source": "url",
+      "url": "https://plugins.company.com/marketplace.json"
+    },
+    {
       "source": "hostPattern",
       "hostPattern": "^gitlab\\.company\\.com$"
     }
   ]
 }
 ```
+
+The allowlist uses exact matching: for GitHub sources `repo` is required and `ref`/`path` must match if specified; for URL sources the full URL must match; for `hostPattern` the host is matched against the regex. These restrictions are set in managed settings and cannot be overridden by users or project configs.
 
 ## Testing
 
@@ -169,7 +180,7 @@ claude plugin validate .
 - **`metadata.pluginRoot`**: Simplifies relative paths — write `"source": "code-formatter"` instead of `"source": "./plugins/code-formatter"`
 - **Mixed sources**: Local plugins (relative paths), GitHub repos, GitLab repos in the same marketplace
 - **Version pinning**: `"ref": "v3.0.0"` on deploy-automation for stable releases
-- **`strict: false`**: api-docs-generator fully defined in marketplace entry, no separate plugin.json components needed
+- **`strict: false`**: api-docs-generator fully defined in marketplace entry; if plugin.json also declares components, the plugin fails to load
 - **Inline hooks**: Hook configuration embedded directly in marketplace entry
 - **Team configuration**: Auto-discovery via `extraKnownMarketplaces`, pre-enabled plugins via `enabledPlugins`
 - **Managed restrictions**: `strictKnownMarketplaces` locks down allowed sources

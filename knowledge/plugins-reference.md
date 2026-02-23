@@ -32,6 +32,8 @@ The `.claude-plugin/plugin.json` file defines plugin metadata. Optional — if o
 }
 ```
 
+> **Note**: `outputStyles` is deprecated since 2.0.30. Use `--system-prompt-file`, CLAUDE.md, or plugins instead.
+
 ### Required fields
 
 Only `name` is required (kebab-case, no spaces). Used for namespacing: `/plugin-name:skill-name`.
@@ -59,6 +61,7 @@ Custom paths supplement default directories — they don't replace them. All pat
 | `skills` | string\|array | Additional skill dirs |
 | `hooks` | string\|array\|object | Hook config paths or inline |
 | `mcpServers` | string\|array\|object | MCP config paths or inline |
+| `outputStyles` | string\|array | Output style files/dirs (**deprecated** since 2.0.30 — use `--system-prompt-file`, CLAUDE.md, or plugins instead) |
 | `lspServers` | string\|array\|object | LSP config paths or inline |
 
 ### Environment variable
@@ -77,7 +80,7 @@ Location: `agents/` directory. Markdown files with YAML frontmatter (`name` + `d
 
 ### Hooks
 
-Location: `hooks/hooks.json`. Same format as settings.json hooks with optional `description` field.
+Location: `hooks/hooks.json`, or inline in `plugin.json`. Same format as settings.json hooks with optional `description` field.
 
 ```json
 {
@@ -90,6 +93,10 @@ Location: `hooks/hooks.json`. Same format as settings.json hooks with optional `
   }
 }
 ```
+
+Available events: PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, UserPromptSubmit, Notification, Stop, SubagentStart, SubagentStop, SessionStart, SessionEnd, TeammateIdle, TaskCompleted, ConfigChange, WorktreeCreate, WorktreeRemove, PreCompact.
+
+Hook types: `command` (execute shell commands), `prompt` (evaluate with LLM using `$ARGUMENTS`), `agent` (run agentic verifier with tools).
 
 ### MCP servers
 
@@ -132,18 +139,20 @@ Optional fields: `args`, `transport` (`stdio`/`socket`), `env`, `initializationO
 | `user` | `~/.claude/settings.json` | Personal, all projects (default) |
 | `project` | `.claude/settings.json` | Team, via version control |
 | `local` | `.claude/settings.local.json` | Project-specific, gitignored |
+| `managed` | `managed-settings.json` | Managed plugins (read-only, update only) |
 
 ## Plugin directory structure
 
 ```
 my-plugin/
 ├── .claude-plugin/
-│   └── plugin.json          # Only manifest here
-├── commands/                # Command markdown files
+│   └── plugin.json          # Only manifest here (optional)
+├── commands/                # Command markdown files (legacy; use skills/)
 ├── agents/                  # Agent markdown files
 ├── skills/                  # Skill directories with SKILL.md
 ├── hooks/
 │   └── hooks.json           # Hook configuration
+├── settings.json            # Default settings (only `agent` key supported)
 ├── scripts/                 # Hook and utility scripts
 ├── .mcp.json                # MCP server definitions
 ├── .lsp.json                # LSP server configurations
@@ -161,22 +170,52 @@ my-plugin/
 | Agents | `agents/` | Subagent files |
 | Skills | `skills/` | Skills with `<name>/SKILL.md` |
 | Hooks | `hooks/hooks.json` | Hook configuration |
+| Settings | `settings.json` | Default config (only `agent` key supported) |
 | MCP | `.mcp.json` | MCP server definitions |
 | LSP | `.lsp.json` | Language server configs |
 
 ## Plugin caching
 
-Plugins are copied to a cache directory (not used in-place). Paths traversing outside the plugin root (`../`) won't work after install. Use symlinks for external dependencies.
+Marketplace plugins are copied to a local cache directory (`~/.claude/plugins/cache`) rather than used in-place. Paths traversing outside the plugin root (`../`) won't work after install. Symlinks are honored during the copy process, so use them for external dependencies.
 
 ## Version management
 
 Follow semantic versioning. Set version in `plugin.json`. Start at `1.0.0`.
 
+## CLI commands
+
+```bash
+claude plugin install <plugin> [--scope user|project|local]
+claude plugin uninstall <plugin> [--scope user|project|local]  # aliases: remove, rm
+claude plugin enable <plugin> [--scope user|project|local]
+claude plugin disable <plugin> [--scope user|project|local]
+claude plugin update <plugin> [--scope user|project|local|managed]
+```
+
+Install `<plugin>` format: `plugin-name` or `plugin-name@marketplace-name`.
+
+To pin a specific branch or tag, append `#ref` to a Git source URL:
+
+```bash
+claude plugin install https://github.com/owner/repo#v2.0.0
+claude plugin install https://github.com/owner/repo#feature-branch
+```
+
+## Debugging
+
+Use `claude --debug` (or `/debug` within the TUI) to see plugin loading details. Use `claude plugin validate` (or `/plugin validate`) to validate manifest JSON.
+
+## Environment and security notes
+
+**`CLAUDE_CODE_SIMPLE` environment variable** (since 2.1.50): When set, disables plugins, hooks, MCP servers, and other extensions. Sessions run in a minimal mode. Plugin authors should be aware that their plugins will not load when this variable is active.
+
+**`allowUnsandboxedCommands` setting** (since 2.0.30): When set to `false` in settings, prevents hook scripts and MCP servers from using the `dangerouslyDisableSandbox` escape. This is a policy-level control that organizations can use to enforce sandboxed execution even if a plugin requests unsandboxed access.
+
 ## Common issues
 
 | Issue | Solution |
 |---|---|
-| Plugin not loading | Validate JSON syntax |
+| Plugin not loading | Validate JSON syntax with `claude plugin validate` or `/plugin validate` |
 | Commands not appearing | Ensure `commands/` at root, not in `.claude-plugin/` |
 | Hooks not firing | `chmod +x script.sh` |
 | MCP server fails | Use `${CLAUDE_PLUGIN_ROOT}` for all paths |

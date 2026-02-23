@@ -46,7 +46,7 @@ You can either:
 * Run `/output-style [style]`, such as `/output-style explanatory`, to directly
   switch to a style
 
-These changes apply to the local project level and are saved in
+These changes apply to the [local project level](https://code.claude.com/docs/en/settings) and are saved in
 `.claude/settings.local.json`. You can also directly edit the `outputStyle`
 field in a settings file at a different level.
 
@@ -96,13 +96,13 @@ prompt specific to software engineering. Neither CLAUDE.md nor
 adds the contents as a user message *following* Claude Code's default system
 prompt. `--append-system-prompt` appends the content to the system prompt.
 
-### Output Styles vs. Agents
+### Output Styles vs. [Agents](https://code.claude.com/docs/en/sub-agents)
 
 Output styles directly affect the main agent loop and only affect the system
 prompt. Agents are invoked to handle specific tasks and can include additional
 settings like the model to use, the tools they have available, and some context
 about when to use the agent.
 
-### Output Styles vs. Skills
+### Output Styles vs. [Skills](https://code.claude.com/docs/en/skills)
 
 Output styles modify how Claude responds (formatting, tone, structure) and are always active once selected. Skills are task-specific prompts that you invoke with `/skill-name` or that Claude loads automatically when relevant. Use output styles for consistent formatting preferences; use skills for reusable workflows and tasks.

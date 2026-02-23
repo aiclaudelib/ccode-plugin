@@ -4,8 +4,8 @@
 
 set -euo pipefail
 
-# Define settings file path
-SETTINGS_FILE=".claude/my-plugin.local.md"
+# Define settings file path using $CLAUDE_PROJECT_DIR for reliable resolution
+SETTINGS_FILE="$CLAUDE_PROJECT_DIR/.claude/my-plugin.local.md"
 
 # Quick exit if settings file doesn't exist
 if [[ ! -f "$SETTINGS_FILE" ]]; then
@@ -16,10 +16,10 @@ fi
 # Parse YAML frontmatter (everything between --- markers)
 FRONTMATTER=$(sed -n '/^---$/,/^---$/{ /^---$/d; p; }' "$SETTINGS_FILE")
 
-# Extract configuration fields
-ENABLED=$(echo "$FRONTMATTER" | grep '^enabled:' | sed 's/enabled: *//' | sed 's/^"\(.*\)"$/\1/')
-STRICT_MODE=$(echo "$FRONTMATTER" | grep '^strict_mode:' | sed 's/strict_mode: *//' | sed 's/^"\(.*\)"$/\1/')
-MAX_SIZE=$(echo "$FRONTMATTER" | grep '^max_file_size:' | sed 's/max_file_size: *//')
+# Extract configuration fields (|| true prevents set -e exit when grep finds no match)
+ENABLED=$(echo "$FRONTMATTER" | grep '^enabled:' | sed 's/enabled: *//' | sed 's/^"\(.*\)"$/\1/' || true)
+STRICT_MODE=$(echo "$FRONTMATTER" | grep '^strict_mode:' | sed 's/strict_mode: *//' | sed 's/^"\(.*\)"$/\1/' || true)
+MAX_SIZE=$(echo "$FRONTMATTER" | grep '^max_file_size:' | sed 's/max_file_size: *//' || true)
 
 # Quick exit if disabled
 if [[ "$ENABLED" != "true" ]]; then

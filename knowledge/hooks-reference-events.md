@@ -1,6 +1,6 @@
 # Hooks reference — per-event details
 
-Event-specific input schemas, decision control fields, and examples for each of the 12 hook events.
+Event-specific input schemas, decision control fields, and examples for each of the 17 hook events.
 
 For configuration schema, handler fields, exit codes, and JSON I/O format, see `hooks-reference-core.md`.
 
@@ -11,7 +11,7 @@ Runs when a session begins or resumes. Matcher values: `startup`, `resume`, `cle
 **Input**: common fields + `source`, `model`, optionally `agent_type`.
 
 ```json
-{ "hook_event_name": "SessionStart", "source": "startup", "model": "claude-sonnet-4-5-20250929" }
+{ "hook_event_name": "SessionStart", "source": "startup", "model": "claude-sonnet-4-6" }
 ```
 
 **Decision control**: return `additionalContext` (string added to Claude's context):
@@ -174,7 +174,7 @@ Cannot block creation. Can return `additionalContext` to inject into the subagen
 
 Runs when a subagent finishes. Matches on agent type.
 
-**Input**: common fields + `stop_hook_active`, `agent_id`, `agent_type`, `agent_transcript_path`.
+**Input**: common fields + `stop_hook_active`, `agent_id`, `agent_type`, `agent_transcript_path`, `last_assistant_message` (text content of the subagent's final response).
 
 Uses same decision control as Stop (top-level `decision: "block"` + `reason`).
 
@@ -182,7 +182,7 @@ Uses same decision control as Stop (top-level `decision: "block"` + `reason`).
 
 Runs when the main agent finishes responding. Does not run on user interrupt. No matcher support.
 
-**Input**: common fields + `stop_hook_active` (true when already continuing from a stop hook -- check to prevent infinite loops).
+**Input**: common fields + `stop_hook_active` (true when already continuing from a stop hook -- check to prevent infinite loops) + `last_assistant_message` (text content of Claude's final response).
 
 **Decision control**:
 
@@ -200,6 +200,63 @@ Runs when the main agent finishes responding. Does not run on user interrupt. No
 Runs before a compact operation. Matcher values: `manual` (`/compact`), `auto` (context window full).
 
 **Input**: common fields + `trigger`, `custom_instructions` (user input for manual, empty for auto).
+
+## TeammateIdle
+
+Runs when an agent team teammate is about to go idle after finishing its turn. No matcher support.
+
+**Input**: common fields + `teammate_name`, `team_name`.
+
+**Decision control**: exit code only (no JSON decision control). Exit 2 to prevent the teammate from going idle (stderr fed back as feedback, teammate continues working).
+
+```bash
+#!/bin/bash
+if [ ! -f "./dist/output.js" ]; then
+  echo "Build artifact missing. Run the build before stopping." >&2
+  exit 2
+fi
+exit 0
+```
+
+## TaskCompleted
+
+Runs when a task is being marked as completed (via TaskUpdate tool or when an agent team teammate finishes its turn with in-progress tasks). No matcher support.
+
+**Input**: common fields + `task_id`, `task_subject`, optionally `task_description`, `teammate_name`, `team_name`.
+
+**Decision control**: exit code only (no JSON decision control). Exit 2 to prevent the task from being marked as completed (stderr fed back to the model as feedback).
+
+## ConfigChange
+
+Runs when a configuration file changes during a session. Matcher values: `user_settings`, `project_settings`, `local_settings`, `policy_settings`, `skills`.
+
+**Input**: common fields + `source`, optionally `file_path`.
+
+```json
+{
+  "hook_event_name": "ConfigChange",
+  "source": "project_settings",
+  "file_path": "/Users/.../my-project/.claude/settings.json"
+}
+```
+
+**Decision control**: `decision: "block"` prevents the configuration change from being applied. `policy_settings` changes cannot be blocked (hooks still fire for audit logging, but blocking is ignored).
+
+## WorktreeCreate
+
+Runs when a worktree is being created via `--worktree` or `isolation: "worktree"`. Replaces default git behavior. No matcher support. Only `type: "command"` hooks supported.
+
+**Input**: common fields + `name` (slug identifier for the new worktree).
+
+**Output**: Hook must print the absolute path to the created worktree directory on stdout. Non-zero exit fails creation. Does not use standard allow/block decision model.
+
+## WorktreeRemove
+
+Runs when a worktree is being removed (at session exit or when a subagent finishes). No matcher support. Only `type: "command"` hooks supported.
+
+**Input**: common fields + `worktree_path` (absolute path to the worktree being removed).
+
+No decision control. Cannot block worktree removal. Hook failures are logged in debug mode only.
 
 ## SessionEnd
 

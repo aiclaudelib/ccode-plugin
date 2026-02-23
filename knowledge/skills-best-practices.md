@@ -43,7 +43,7 @@ Test with all models you plan to use. What works for Opus may need more detail f
 | Field | Constraints |
 |-------|------------|
 | `name` | Max 64 chars, lowercase letters/numbers/hyphens only, no XML tags, no reserved words ("anthropic", "claude") |
-| `description` | Non-empty, max 1024 chars, no XML tags |
+| `description` | Recommended. Max 1024 chars, no XML tags. If omitted, uses the first paragraph of markdown content. |
 
 ### Naming Conventions
 

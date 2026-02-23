@@ -8,17 +8,18 @@ MCP servers support multiple authentication methods depending on the server type
 
 | Auth Method | Server Types | User Experience | Best For |
 |---|---|---|---|
-| OAuth (automatic) | SSE, HTTP | Browser consent flow | Cloud services |
-| Bearer tokens | HTTP, SSE, WS | Set env var | REST APIs |
-| API keys | HTTP, SSE, WS | Set env var | Simple APIs |
+| OAuth (automatic) | HTTP, SSE | Browser consent flow | Cloud services |
+| OAuth (pre-configured) | HTTP, SSE | Register app + browser consent | Servers without dynamic client registration |
+| Bearer tokens | HTTP, SSE | Set env var | REST APIs |
+| API keys | HTTP, SSE | Set env var | Simple APIs |
 | Environment variables | stdio | Set env var | Local servers |
-| Dynamic headers | SSE, HTTP, WS | Script generates headers | Rotating tokens, JWT, HMAC |
+| Dynamic headers | HTTP, SSE | Script generates headers | Rotating tokens, JWT, HMAC |
 
 ## OAuth (Automatic)
 
 ### How It Works
 
-Claude Code handles the complete OAuth 2.0 flow automatically for SSE and HTTP servers. No extra configuration is needed -- just specify the server URL and Claude Code does the rest.
+Claude Code handles the complete OAuth 2.0 flow automatically for HTTP and SSE servers. No extra configuration is needed -- just specify the server URL and Claude Code does the rest.
 
 The OAuth flow proceeds as follows:
 
@@ -56,12 +57,41 @@ Claude Code automatically:
 
 Known OAuth-enabled MCP servers that work out of the box:
 
-| Service | URL | Notes |
-|---|---|---|
-| Asana | `https://mcp.asana.com/sse` | Task and project management |
-| GitHub | `https://mcp.github.com/sse` | Repository and issue management |
+| Service | URL | Transport | Notes |
+|---|---|---|---|
+| GitHub | `https://api.githubcopilot.com/mcp/` | HTTP | Repository and issue management |
+| Asana | `https://mcp.asana.com/sse` | SSE | Task and project management |
+| Sentry | `https://mcp.sentry.dev/mcp` | HTTP | Error monitoring |
+| Notion | `https://mcp.notion.com/mcp` | HTTP | Workspace and document management |
+| Stripe | `https://mcp.stripe.com` | HTTP | Payment processing |
+| PayPal | `https://mcp.paypal.com/mcp` | HTTP | Payment processing |
+| HubSpot | `https://mcp.hubspot.com/anthropic` | HTTP | CRM and marketing |
 
 Custom OAuth servers are also supported as long as they implement the standard OAuth 2.0 authorization code flow with MCP's discovery mechanism.
+
+### Pre-configured OAuth Credentials
+
+Some servers don't support automatic OAuth setup (dynamic client registration). If you see "Incompatible auth server: does not support dynamic client registration," you need to register an OAuth app first.
+
+**Steps:**
+1. Register an OAuth app through the server's developer portal
+2. Note your client ID, client secret, and configure a redirect URI (`http://localhost:PORT/callback`)
+3. Add the server with credentials:
+
+```bash
+claude mcp add --transport http \
+  --client-id your-client-id --client-secret --callback-port 8080 \
+  my-server https://mcp.example.com/mcp
+```
+
+Or via JSON:
+```bash
+claude mcp add-json my-server \
+  '{"type":"http","url":"https://mcp.example.com/mcp","oauth":{"clientId":"your-client-id","callbackPort":8080}}' \
+  --client-secret
+```
+
+The client secret is stored securely in the system keychain (macOS) or credentials file, not in config. For CI environments, use `MCP_CLIENT_SECRET` environment variable to skip the interactive prompt.
 
 ### OAuth Scopes
 
@@ -80,6 +110,10 @@ This plugin requires the following permissions when connecting to Asana:
 You will be prompted to authorize in your browser on first use. No API tokens
 or environment variables are needed.
 ```
+
+### Authenticating in Claude Code
+
+Use `/mcp` within Claude Code to authenticate with remote servers that require OAuth. Select "Authenticate" for the target server and follow the browser flow. Use "Clear authentication" in the `/mcp` menu to revoke access.
 
 ### Token Storage and Lifecycle
 
@@ -120,7 +154,7 @@ Claude Code manages OAuth tokens securely:
 
 ### Bearer Tokens
 
-The most common authentication method for HTTP and WebSocket servers. Tokens are passed in the standard `Authorization` header with the `Bearer` prefix.
+The most common authentication method for HTTP and SSE servers. Tokens are passed in the standard `Authorization` header with the `Bearer` prefix.
 
 **Configuration:**
 ```json
@@ -541,7 +575,7 @@ Alternatively, use a `headersHelper` script that reads the workspace from a sett
 
 - Use environment variables for all tokens and secrets (`${VAR}` syntax)
 - Document all required variables in the plugin README with clear instructions
-- Use HTTPS/WSS for all network connections
+- Use HTTPS for all network connections
 - Let OAuth handle authentication when the service supports it
 - Rotate tokens regularly and document the rotation process
 - Use different tokens for development and production environments

@@ -144,9 +144,9 @@ Always add to project `.gitignore`:
 
 ## Editing Settings
 
-Users edit settings files manually, then restart Claude Code:
+Users edit settings files manually. Hook changes take effect after restarting Claude Code or reviewing via the `/hooks` menu:
 
 ```bash
 vim .claude/my-plugin.local.md
-# Changes take effect after restart
+# Changes take effect after restart or /hooks review
 ```

@@ -2,6 +2,8 @@
 
 Complete reference for all MCP server types supported in Claude Code plugins.
 
+> **Note**: Claude Code supports three transport types: **stdio**, **HTTP** (streamable-http, recommended for remote servers), and **SSE** (deprecated). WebSocket is not a supported MCP transport.
+
 ## stdio (Standard Input/Output)
 
 ### Overview
@@ -78,6 +80,7 @@ Execute local MCP servers as child processes with communication via stdin/stdout
 | `command` | Yes | Executable to run (binary path, `npx`, `node`, `python`, etc.) |
 | `args` | No | Array of command-line arguments |
 | `env` | No | Object of environment variables to set for the process |
+| `cwd` | No | Working directory for the process (supports `${CLAUDE_PLUGIN_ROOT}`) |
 
 Note: stdio servers are the **default type**. If you omit `type`, Claude Code assumes stdio and expects `command` to be present.
 
@@ -196,11 +199,13 @@ If `LOG_LEVEL` is not set in the user's shell, it defaults to `info`.
 
 ---
 
-## SSE (Server-Sent Events)
+## SSE (Server-Sent Events) -- Deprecated
+
+> **Deprecated**: SSE transport is deprecated. Use HTTP (streamable-http) servers instead, where available.
 
 ### Overview
 
-Connect to hosted MCP servers via HTTP with server-sent events for streaming. Best for cloud services with OAuth authentication. The server runs externally (not managed by Claude Code) and Claude Code connects to it over the network.
+Connect to hosted MCP servers via HTTP with server-sent events for streaming. Still supported for backward compatibility with existing SSE-only endpoints. The server runs externally (not managed by Claude Code) and Claude Code connects to it over the network.
 
 ### Configuration
 
@@ -273,10 +278,12 @@ No additional configuration needed for OAuth. For custom headers (non-OAuth), us
 
 ### Known OAuth-Enabled MCP Servers
 
-- Asana: `https://mcp.asana.com/sse`
-- GitHub: `https://mcp.github.com/sse`
+- Asana: `https://mcp.asana.com/sse` (SSE)
+- GitHub: `https://api.githubcopilot.com/mcp/` (HTTP -- preferred over SSE)
+- Sentry: `https://mcp.sentry.dev/mcp` (HTTP)
+- Notion: `https://mcp.notion.com/mcp` (HTTP)
 
-These servers are pre-configured for OAuth and work with no authentication setup. Users simply approve the consent screen in their browser on first use.
+These servers are pre-configured for OAuth and work with no authentication setup. Users simply approve the consent screen in their browser on first use. Prefer HTTP endpoints over SSE where both are available.
 
 ### SSE Protocol Details
 
@@ -328,11 +335,11 @@ This split architecture means SSE servers can scale horizontally -- the POST end
 
 ---
 
-## HTTP (REST API)
+## HTTP (Streamable HTTP) -- Recommended for Remote Servers
 
 ### Overview
 
-Connect to RESTful MCP servers via standard HTTP requests. Best for token-based auth and stateless interactions. Each tool call is an independent HTTP request/response cycle with no persistent connection.
+The recommended transport for all remote MCP servers. Connect via standard HTTP requests with support for OAuth, bearer tokens, and API keys. Each tool call is an independent HTTP request/response cycle with no persistent connection.
 
 ### Configuration
 
@@ -381,9 +388,10 @@ Connect to RESTful MCP servers via standard HTTP requests. Best for token-based 
 | Field | Required | Description |
 |---|---|---|
 | `type` | Yes | Must be `"http"` |
-| `url` | Yes | HTTPS URL of the HTTP MCP endpoint |
+| `url` | Yes | HTTPS URL of the HTTP MCP endpoint (supports `${VAR}` expansion) |
 | `headers` | No | HTTP headers for authentication and metadata (supports `${VAR}` expansion) |
 | `headersHelper` | No | Path to script that outputs JSON headers to stdout |
+| `oauth` | No | OAuth configuration object with `clientId` and optional `callbackPort` (for pre-configured OAuth apps) |
 
 ### Request/Response Flow
 
@@ -451,7 +459,7 @@ export API_TOKEN="prod-token"
 **Timeout issues:**
 - Check server response time -- if consistently slow, investigate server performance
 - Optimize tool implementations on the server side
-- Consider using SSE or WebSocket for long-running operations that need streaming
+- Consider using SSE for long-running operations that need streaming
 - Check if corporate firewalls or proxies add latency
 
 **Empty responses:**
@@ -461,137 +469,23 @@ export API_TOKEN="prod-token"
 
 ---
 
-## WebSocket (Real-time)
-
-### Overview
-
-Connect to MCP servers via WebSocket for real-time bidirectional communication. Best for streaming, push notifications, and low-latency applications. The connection stays open for the entire session, allowing both client and server to initiate messages at any time.
-
-### Configuration
-
-**Basic:**
-```json
-{
-  "realtime": {
-    "type": "ws",
-    "url": "wss://mcp.example.com/ws"
-  }
-}
-```
-
-**With authentication:**
-```json
-{
-  "realtime": {
-    "type": "ws",
-    "url": "wss://mcp.example.com/ws",
-    "headers": {
-      "Authorization": "Bearer ${TOKEN}",
-      "X-Client-ID": "${CLIENT_ID}"
-    }
-  }
-}
-```
-
-**With dynamic headers:**
-```json
-{
-  "realtime": {
-    "type": "ws",
-    "url": "wss://mcp.example.com/ws",
-    "headersHelper": "${CLAUDE_PLUGIN_ROOT}/scripts/ws-auth.sh"
-  }
-}
-```
-
-### Configuration Fields
-
-| Field | Required | Description |
-|---|---|---|
-| `type` | Yes | Must be `"ws"` |
-| `url` | Yes | WSS URL of the WebSocket MCP endpoint |
-| `headers` | No | Headers sent during WebSocket upgrade (supports `${VAR}` expansion) |
-| `headersHelper` | No | Path to script that outputs JSON headers to stdout |
-
-### Connection Lifecycle
-
-1. **Handshake**: WebSocket upgrade request (HTTP -> WS) with authentication headers
-2. **Connection**: Persistent bidirectional channel established
-3. **Tool Registration**: Server sends available tools via protocol messages
-4. **Messages**: JSON-RPC messages over WebSocket frames in both directions
-5. **Heartbeat**: Keep-alive ping/pong messages to detect stale connections
-6. **Server Push**: Server can send notifications and updates without client request
-7. **Reconnection**: Automatic reconnection on disconnect with exponential backoff
-
-### WebSocket vs SSE
-
-Both are persistent connection types, but they differ in key ways:
-
-| Aspect | SSE | WebSocket |
-|---|---|---|
-| Direction | Server push + client POST | True bidirectional on one connection |
-| Protocol | HTTP-based | WS protocol (HTTP upgrade) |
-| Proxy support | Better (plain HTTP) | May be blocked by some proxies |
-| Reconnection | Built into SSE spec | Must be implemented |
-| Overhead | Higher (separate POST for each call) | Lower (single connection for all messages) |
-
-### Use Cases
-
-- Real-time data streaming (live metrics, log tailing, monitoring dashboards)
-- Push notifications from server to client (build status, deployment alerts)
-- Collaborative editing with shared state
-- Low-latency tool calls where every millisecond matters
-- Live updates and event subscriptions
-- Server-initiated workflows (server detects a condition and pushes a notification)
-
-### Best Practices
-
-1. **Use WSS (secure WebSocket), never WS** -- insecure connections are rejected by Claude Code
-2. **Handle reconnection** -- connections can drop at any time. Claude Code auto-reconnects
-3. **Implement heartbeat on the server** -- detect stale connections and clean up resources
-4. **Buffer messages during disconnection** -- prevent data loss when reconnecting
-5. **Set connection timeouts** -- detect stale connections that appear alive but are not
-6. **Keep message sizes reasonable** -- very large WebSocket frames can cause issues
-7. **Handle backpressure** -- if the server sends faster than the client can process, implement flow control
-
-### Troubleshooting
-
-**Connection drops:**
-- Check network stability and latency
-- Verify server supports WebSocket protocol (not just HTTP)
-- Review firewall/proxy settings (some corporate proxies block WebSocket upgrade requests)
-- Check server-side connection timeout configuration
-- Ensure ping/pong heartbeat is implemented on the server
-
-**Messages not delivered:**
-- Verify message format matches JSON-RPC specification
-- Check for message size limits on the server or intermediary proxies
-- Look for out-of-order message handling issues
-- Check that the WebSocket connection is still open before sending
-
-**Cannot establish connection:**
-- Verify the WSS URL is correct
-- Check if the server requires specific subprotocols during the upgrade
-- Ensure authentication headers are being sent with the upgrade request
-- Test the endpoint with a WebSocket client tool (like `wscat`) to rule out server issues
-
 ---
 
 ## Comparison Matrix
 
-| Feature | stdio | SSE | HTTP | WebSocket |
-|---|---|---|---|---|
-| **Transport** | Process stdin/stdout | HTTP + SSE stream | HTTP REST | WebSocket frames |
-| **Direction** | Bidirectional | Server-push + client POST | Request/response | Bidirectional |
-| **State** | Stateful (process) | Stateful (connection) | Stateless | Stateful (connection) |
-| **Auth** | Environment variables | OAuth (automatic) | Headers (tokens) | Headers (tokens) |
-| **Latency** | Lowest | Medium | Medium | Low |
-| **Setup** | Easy | Medium | Easy | Medium |
-| **Best for** | Local tools, custom servers | Cloud services, OAuth | REST APIs, tokens | Real-time, streaming |
-| **Reconnect** | Process respawn | Automatic | N/A (stateless) | Automatic |
-| **Server managed by** | Claude Code (child process) | External | External | External |
-| **Network required** | No | Yes | Yes | Yes |
-| **Offline capable** | Yes | No | No | No |
+| Feature | stdio | HTTP (recommended) | SSE (deprecated) |
+|---|---|---|---|
+| **Transport** | Process stdin/stdout | Streamable HTTP | HTTP + SSE stream |
+| **Direction** | Bidirectional | Request/response | Server-push + client POST |
+| **State** | Stateful (process) | Stateless | Stateful (connection) |
+| **Auth** | Environment variables | OAuth, headers (tokens) | OAuth (automatic) |
+| **Latency** | Lowest | Medium | Medium |
+| **Setup** | Easy | Easy | Medium |
+| **Best for** | Local tools, custom servers | All remote services | Legacy SSE-only endpoints |
+| **Reconnect** | Process respawn | N/A (stateless) | Automatic |
+| **Server managed by** | Claude Code (child process) | External | External |
+| **Network required** | No | Yes | Yes |
+| **Offline capable** | Yes | No | No |
 
 ## Choosing the Right Type
 
@@ -604,33 +498,23 @@ Both are persistent connection types, but they differ in key ways:
 - Working offline or in restricted network environments
 - Building plugins that need to access local resources
 
-**Use SSE when:**
+**Use HTTP when (recommended for all remote servers):**
 - Connecting to hosted cloud services (SaaS products)
 - Need OAuth authentication (simplest for users -- no tokens to manage)
-- Using official MCP servers (Asana, GitHub, etc.)
-- Want automatic reconnection on network issues
-- Need server-push capabilities (notifications, progress updates)
+- Using official MCP servers (GitHub, Sentry, Notion, Stripe, etc.)
+- Integrating with existing REST APIs or microservices
+- Using token-based authentication (API keys, bearer tokens)
+- Backend is serverless (AWS Lambda, Cloud Functions)
 - Deploying a previously local server to production
 
-**Use HTTP when:**
-- Integrating with existing REST APIs or microservices
-- Need stateless interactions (no persistent connection)
-- Using token-based authentication (API keys, bearer tokens)
-- Simple request/response patterns are sufficient
-- Backend is serverless (AWS Lambda, Cloud Functions)
-- Service already has an HTTP API you are wrapping with MCP
-
-**Use WebSocket when:**
-- Need real-time bidirectional communication
-- Building features with push notifications from server
-- Low latency is critical and every millisecond matters
-- Need persistent streaming connections
-- Server needs to initiate communication (alerts, updates)
-- Building collaborative or real-time monitoring tools
+**Use SSE only when:**
+- The service does not yet offer an HTTP (streamable-http) endpoint
+- Connecting to legacy SSE-only MCP servers (e.g., `https://mcp.asana.com/sse`)
+- SSE transport is deprecated; migrate to HTTP when possible
 
 ## Migrating Between Types
 
-### From stdio to SSE
+### From stdio to HTTP
 
 Deploy your local server as a hosted service, then change configuration:
 
@@ -644,57 +528,27 @@ Deploy your local server as a hosted service, then change configuration:
 }
 ```
 
-**After (SSE):**
+**After (HTTP):**
 ```json
 {
   "hosted-server": {
-    "type": "sse",
-    "url": "https://mcp.example.com/sse"
+    "type": "http",
+    "url": "https://mcp.example.com/mcp"
   }
 }
 ```
 
 **Migration steps:**
-1. Add HTTP/SSE transport to your server code
+1. Add HTTP transport to your server code
 2. Deploy server to a hosting platform
 3. Configure HTTPS and authentication
-4. Update `.mcp.json` to use SSE type
+4. Update `.mcp.json` to use HTTP type
 5. Test with the hosted endpoint
 6. Keep stdio as a fallback for local development
 
-### From HTTP to WebSocket
-
-Upgrade for real-time capabilities:
-
-**Before (HTTP):**
-```json
-{
-  "api": {
-    "type": "http",
-    "url": "https://api.example.com/mcp"
-  }
-}
-```
-
-**After (WebSocket):**
-```json
-{
-  "realtime": {
-    "type": "ws",
-    "url": "wss://api.example.com/ws"
-  }
-}
-```
-
-**Benefits of migration:**
-- Real-time updates without polling
-- Lower latency (no HTTP overhead per request)
-- Bidirectional communication (server can push)
-- Reduced total network traffic for frequent operations
-
 ### From SSE to HTTP
 
-Downgrade when you do not need streaming:
+Migrate from deprecated SSE to the recommended HTTP transport:
 
 **Before (SSE):**
 ```json
@@ -711,15 +565,16 @@ Downgrade when you do not need streaming:
 {
   "service": {
     "type": "http",
-    "url": "https://mcp.example.com/http",
-    "headers": {
-      "Authorization": "Bearer ${API_TOKEN}"
-    }
+    "url": "https://mcp.example.com/mcp"
   }
 }
 ```
 
-This is useful when OAuth is not needed and simple token auth is preferred.
+**Benefits of migration:**
+- HTTP is the recommended and actively supported transport
+- Full OAuth support including pre-configured credentials
+- Simpler architecture (no persistent connection to manage)
+- Better compatibility with proxies, CDNs, and load balancers
 
 ## Multiple Server Types in One Plugin
 
@@ -732,8 +587,8 @@ Combine different types for different use cases in a single `.mcp.json`:
     "args": ["-y", "mcp-server-sqlite", "${CLAUDE_PLUGIN_ROOT}/data/app.db"]
   },
   "cloud-api": {
-    "type": "sse",
-    "url": "https://mcp.example.com/sse"
+    "type": "http",
+    "url": "https://mcp.example.com/mcp"
   },
   "internal-service": {
     "type": "http",
@@ -741,18 +596,11 @@ Combine different types for different use cases in a single `.mcp.json`:
     "headers": {
       "Authorization": "Bearer ${API_TOKEN}"
     }
-  },
-  "monitoring": {
-    "type": "ws",
-    "url": "wss://monitor.example.com/ws",
-    "headers": {
-      "Authorization": "Bearer ${MONITOR_TOKEN}"
-    }
   }
 }
 ```
 
-This allows a single plugin to work with local databases (stdio), cloud services (SSE with OAuth), internal APIs (HTTP with tokens), and real-time monitoring (WebSocket) simultaneously. Each server provides its own set of tools, all available under the `mcp__plugin_<plugin>_<server>__<tool>` naming convention.
+This allows a single plugin to work with local databases (stdio), cloud services (HTTP with OAuth), and internal APIs (HTTP with tokens) simultaneously. Each server provides its own set of tools, all available under the `mcp__plugin_<plugin>_<server>__<tool>` naming convention.
 
 ## Security Considerations
 
@@ -764,9 +612,9 @@ This allows a single plugin to work with local databases (stdio), cloud services
 - Do not execute user-provided command strings
 - Limit file system access in the server to necessary directories
 
-### Network Security (SSE, HTTP, WebSocket)
+### Network Security (HTTP, SSE)
 
-- Always use HTTPS/WSS -- Claude Code rejects insecure connections
+- Always use HTTPS -- Claude Code rejects insecure connections
 - Validate SSL certificates -- do not skip certificate verification
 - Use secure token storage (environment variables, not files)
 - Implement proper CORS headers on server endpoints

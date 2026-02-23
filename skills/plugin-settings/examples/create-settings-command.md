@@ -42,7 +42,7 @@ Tell the user:
 - Settings file created at `.claude/my-plugin.local.md`
 - Current configuration summary
 - How to edit manually if needed
-- Reminder: restart Claude Code for changes to take effect
+- Reminder: restart Claude Code (or review via `/hooks` menu) for hook changes to take effect
 - Settings file is gitignored (will not be committed)
 
 ## Implementation Notes

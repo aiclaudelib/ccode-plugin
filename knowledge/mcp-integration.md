@@ -7,19 +7,20 @@ Model Context Protocol (MCP) enables Claude Code plugins to connect with externa
 | Type | Transport | Config key | Auth method | Best for |
 |---|---|---|---|---|
 | stdio | Child process (stdin/stdout) | `command` + `args` | Environment variables | Local tools, custom servers, NPM packages |
-| SSE | HTTP + Server-Sent Events | `type: "sse"` + `url` | OAuth (automatic) | Hosted services (Asana, GitHub) |
-| HTTP | REST requests | `type: "http"` + `url` | Bearer tokens, API keys | REST API backends, stateless calls |
-| WebSocket | Persistent bidirectional | `type: "ws"` + `url` | Bearer tokens | Real-time streaming, low-latency |
+| HTTP | Streamable HTTP | `type: "http"` + `url` | OAuth (automatic), Bearer tokens, API keys | Remote services, REST API backends (recommended for remote) |
+| SSE | HTTP + Server-Sent Events | `type: "sse"` + `url` | OAuth (automatic) | Legacy hosted services (deprecated -- use HTTP instead) |
+
+> **Note**: SSE transport is deprecated. Use HTTP (streamable HTTP) servers instead, where available. WebSocket (`ws`) is **not** a supported MCP transport in Claude Code.
 
 ### Comparison matrix
 
-| Feature | stdio | SSE | HTTP | WebSocket |
-|---|---|---|---|---|
-| Direction | Bidirectional | Server-to-client | Request/response | Bidirectional |
-| State | Stateful | Stateful | Stateless | Stateful |
-| Latency | Lowest | Medium | Medium | Low |
-| Setup complexity | Easy | Medium | Easy | Medium |
-| Reconnection | Process respawn | Automatic | N/A | Automatic |
+| Feature | stdio | HTTP | SSE (deprecated) |
+|---|---|---|---|
+| Direction | Bidirectional | Request/response | Server-to-client |
+| State | Stateful | Stateless | Stateful |
+| Latency | Lowest | Medium | Medium |
+| Setup complexity | Easy | Easy | Medium |
+| Reconnection | Process respawn | N/A | Automatic |
 
 ### stdio
 
@@ -72,45 +73,19 @@ Claude Code spawns a local process and communicates via JSON-RPC over stdin/stdo
 - Pass configuration via `args` or `env`, not stdin
 - Handle server crashes gracefully
 
-### SSE
+### HTTP (recommended for remote servers)
 
-Connect to hosted MCP servers via HTTP with server-sent events for streaming. OAuth is handled automatically by Claude Code: the user is prompted in a browser on first use, tokens are stored securely and refreshed automatically.
+The recommended transport for remote MCP servers. Streamable HTTP supports OAuth, bearer tokens, API keys, and custom headers. Each tool call is an independent HTTP request.
 
 **Basic (OAuth)**:
 ```json
 {
-  "asana": {
-    "type": "sse",
-    "url": "https://mcp.asana.com/sse"
+  "github": {
+    "type": "http",
+    "url": "https://api.githubcopilot.com/mcp/"
   }
 }
 ```
-
-**With custom headers**:
-```json
-{
-  "service": {
-    "type": "sse",
-    "url": "https://mcp.example.com/sse",
-    "headers": {
-      "X-API-Version": "v1",
-      "X-Client-ID": "${CLIENT_ID}"
-    }
-  }
-}
-```
-
-Known OAuth-enabled MCP servers include Asana (`https://mcp.asana.com/sse`) and GitHub (`https://mcp.github.com/sse`).
-
-**SSE best practices**:
-- Always use HTTPS, never HTTP
-- Let OAuth handle authentication when available
-- Document required OAuth scopes in your README
-- Handle connection failures gracefully
-
-### HTTP
-
-Stateless request/response pattern. Each tool call is an independent HTTP request. Best for REST API backends and token-based authentication.
 
 **With bearer token**:
 ```json
@@ -141,31 +116,43 @@ Stateless request/response pattern. Each tool call is an independent HTTP reques
 }
 ```
 
-Request flow: GET for tool discovery, POST for tool invocation, JSON response with results or errors.
+**HTTP best practices**:
+- Always use HTTPS, never HTTP
+- Let OAuth handle authentication when available
+- Use environment variables for tokens -- never hardcode
+- Document required OAuth scopes in your README
 
-### WebSocket
+### SSE (deprecated)
 
-Persistent bidirectional channel via WebSocket. Supports automatic reconnection, heartbeat/keep-alive, and message buffering during disconnection.
+> **Deprecated**: SSE transport is deprecated. Use HTTP servers instead, where available.
 
+Connect to hosted MCP servers via HTTP with server-sent events for streaming. Still supported for backward compatibility with existing SSE-only endpoints.
+
+**Basic (OAuth)**:
 ```json
 {
-  "realtime": {
-    "type": "ws",
-    "url": "wss://mcp.example.com/ws",
+  "asana": {
+    "type": "sse",
+    "url": "https://mcp.asana.com/sse"
+  }
+}
+```
+
+**With custom headers**:
+```json
+{
+  "service": {
+    "type": "sse",
+    "url": "https://mcp.example.com/sse",
     "headers": {
-      "Authorization": "Bearer ${TOKEN}",
+      "X-API-Version": "v1",
       "X-Client-ID": "${CLIENT_ID}"
     }
   }
 }
 ```
 
-Use cases: real-time data streaming, live updates, collaborative editing, push notifications from server.
-
-**WebSocket best practices**:
-- Always use WSS (secure WebSocket), never WS
-- Handle reconnection and message buffering
-- Set connection timeouts
+Known OAuth-enabled MCP servers include Asana (`https://mcp.asana.com/sse`) and GitHub (`https://api.githubcopilot.com/mcp/` via HTTP transport).
 
 ## Configuration methods
 
@@ -174,6 +161,8 @@ Plugins can bundle MCP servers in two ways.
 ### Method 1: .mcp.json at plugin root (recommended)
 
 Create `.mcp.json` at the plugin root level. Best for multi-server setups and clean separation of concerns.
+
+> **Note**: Plugin `.mcp.json` files use a **flat format** (server names at the top level). This differs from project-scoped `.mcp.json` files created by `claude mcp add --scope project`, which wrap servers inside a `"mcpServers"` key.
 
 ```json
 {
@@ -185,15 +174,15 @@ Create `.mcp.json` at the plugin root level. Best for multi-server setups and cl
     }
   },
   "cloud-api": {
-    "type": "sse",
-    "url": "https://mcp.example.com/sse"
+    "type": "http",
+    "url": "https://mcp.example.com/mcp"
   }
 }
 ```
 
 ### Method 2: Inline in plugin.json
 
-Add `mcpServers` field directly to plugin.json. Good for simple single-server plugins.
+Add `mcpServers` field directly to plugin.json. Good for simple single-server plugins. The `mcpServers` field can be an inline object or a path to an external JSON file.
 
 ```json
 {
@@ -214,10 +203,19 @@ Use `.mcp.json` for multi-server setups or cleaner separation. Use inline for si
 
 All MCP configuration fields support `${VAR}` substitution.
 
+**Supported syntax:**
+- `${VAR}` -- expands to the value of environment variable `VAR`
+- `${VAR:-default}` -- expands to `VAR` if set, otherwise uses `default`
+
+**Expansion locations:** `command`, `args`, `env`, `url`, `headers`.
+
 | Variable | Source | Example |
 |---|---|---|
 | `${CLAUDE_PLUGIN_ROOT}` | Plugin directory (always available) | `"${CLAUDE_PLUGIN_ROOT}/servers/run.sh"` |
 | `${MY_API_KEY}` | User's shell environment | `"env": {"API_KEY": "${MY_API_KEY}"}` |
+| `${LOG_LEVEL:-info}` | User's environment with fallback | `"env": {"LOG_LEVEL": "${LOG_LEVEL:-info}"}` |
+
+If a required environment variable is not set and has no default value, Claude Code will fail to parse the config.
 
 **In command/args**:
 ```json
@@ -402,16 +400,22 @@ Or via URL:
 ## Lifecycle
 
 1. Plugin loads and MCP configuration is parsed
-2. Server process starts (stdio) or connection established (SSE/HTTP/WS)
+2. Server process starts (stdio) or connection established (SSE/HTTP)
 3. Tools are discovered and registered with the `mcp__plugin_...` prefix
 4. Tools become available to commands, agents, and skills
 5. Server shuts down when Claude Code exits
 
 **Lazy loading**: not all servers connect at startup. First tool use may trigger connection establishment. Connection pooling is managed automatically.
 
+**Dynamic tool updates**: MCP servers can send `list_changed` notifications, and Claude Code will automatically refresh the available capabilities from that server without requiring a reconnect.
+
 View all active servers and their tools with `/mcp`. Use `claude --debug` for detailed connection logs.
 
-Configuration changes require restarting Claude Code.
+Configuration changes (enabling/disabling servers) require restarting Claude Code.
+
+**MCP startup timeout**: Configure the timeout for MCP server startup using the `MCP_TIMEOUT` environment variable (e.g., `MCP_TIMEOUT=10000 claude` for a 10-second timeout).
+
+**MCP output limits**: Claude Code warns when MCP tool output exceeds 10,000 tokens. The default maximum is 25,000 tokens. Adjust with `MAX_MCP_OUTPUT_TOKENS` environment variable (e.g., `MAX_MCP_OUTPUT_TOKENS=50000`).
 
 ## Integration patterns
 
@@ -473,8 +477,8 @@ Combine different server types for workflows spanning multiple services:
     "args": ["-y", "mcp-server-sqlite", "./data.db"]
   },
   "github": {
-    "type": "sse",
-    "url": "https://mcp.github.com/sse"
+    "type": "http",
+    "url": "https://api.githubcopilot.com/mcp/"
   },
   "internal-api": {
     "type": "http",
@@ -531,7 +535,7 @@ Provide graceful degradation:
 | Do | Do not |
 |---|---|
 | Use `${VAR}` for all tokens and secrets | Hardcode tokens in configuration |
-| Use HTTPS / WSS for network servers | Use HTTP / WS |
+| Use HTTPS for network servers | Use HTTP (insecure) |
 | Pre-allow specific tools in commands | Use wildcard `*` for tool permissions |
 | Document required env vars in README | Commit credentials to git |
 | Let OAuth handle auth when available | Store tokens in plugin files |
@@ -542,11 +546,9 @@ Provide graceful degradation:
 
 **Use stdio when** you distribute a server with the plugin, need lowest latency, or work with local resources (files, databases). Ideal for NPM-packaged servers (`npx -y my-mcp-server`), custom Python/Node servers, and local database connections.
 
-**Use SSE when** connecting to hosted services with OAuth, especially official MCP endpoints (Asana, GitHub). No local installation needed. Best when the service provider hosts the MCP endpoint.
+**Use HTTP when** connecting to remote services -- this is the recommended transport for all remote MCP servers. Supports OAuth, bearer tokens, and API keys. Good for cloud services, REST APIs, internal services, microservices, and serverless functions.
 
-**Use HTTP when** integrating with REST APIs using token auth for stateless request/response patterns. Good for internal services, microservices, and serverless functions.
-
-**Use WebSocket when** you need real-time bidirectional streaming, push notifications from server, or very low latency. Best for collaborative features and live data updates.
+**Use SSE only when** the service does not yet offer an HTTP (streamable-http) endpoint. SSE transport is deprecated and should be migrated to HTTP when possible.
 
 ## Testing MCP integration
 
@@ -584,3 +586,67 @@ Provide graceful degradation:
 | HTTP 403 | Token valid but lacks permissions, check scopes |
 | HTTP 429 | Rate limiting, implement backoff or reduce request frequency |
 | Environment variables not expanding | Verify variables are exported in shell before starting Claude Code |
+
+## MCP Tool Search
+
+When many MCP servers are configured, tool definitions can consume significant context. Claude Code automatically enables Tool Search when MCP tool descriptions exceed 10% of the context window. Tools are deferred and loaded on-demand via a search tool. Control with `ENABLE_TOOL_SEARCH` environment variable:
+
+| Value | Behavior |
+|---|---|
+| `auto` | Activates when MCP tools exceed 10% of context (default) |
+| `auto:<N>` | Custom threshold percentage (e.g., `auto:5` for 5%) |
+| `true` | Always enabled |
+| `false` | Disabled, all MCP tools loaded upfront |
+
+Tool Search requires Sonnet 4+ or Opus 4+. Add clear server instructions to help Claude discover your tools.
+
+## MCP Resources
+
+MCP servers can expose resources accessible via `@` mentions. Reference resources with `@server:protocol://resource/path` in prompts. Resources are fetched and included as attachments automatically.
+
+## MCP Prompts as Commands
+
+MCP servers can expose prompts that become available as slash commands: `/mcp__servername__promptname`. Arguments are passed space-separated after the command.
+
+## CLI Management
+
+Users manage MCP servers via the `claude mcp` CLI:
+
+```bash
+claude mcp add --transport http <name> <url>      # Add HTTP server
+claude mcp add --transport sse <name> <url>        # Add SSE server (deprecated)
+claude mcp add --transport stdio <name> -- <cmd>   # Add stdio server
+claude mcp add-json <name> '<json>'                # Add from JSON config
+claude mcp add-from-claude-desktop                 # Import from Claude Desktop
+claude mcp list                                    # List configured servers
+claude mcp get <name>                              # Get server details
+claude mcp remove <name>                           # Remove a server
+claude mcp reset-project-choices                   # Reset project server approvals
+claude mcp serve                                   # Run Claude Code as MCP server
+```
+
+Options (`--transport`, `--env`, `--scope`, `--header`) must come **before** the server name. Use `--` to separate server name from the command and arguments for stdio servers.
+
+## MCP Scopes (User Configuration)
+
+When users add MCP servers (not via plugins), three scopes are available:
+
+| Scope | Storage | Description |
+|---|---|---|
+| `local` | `~/.claude.json` (per-project path) | Private to user, current project only (default) |
+| `project` | `.mcp.json` at project root | Shared via version control, wrapped in `{"mcpServers": {...}}` |
+| `user` | `~/.claude.json` | Available across all projects |
+
+> **Note**: The scope names were renamed: `local` was previously called `project`, and `user` was previously called `global`.
+
+## Pre-configured OAuth Credentials
+
+Some MCP servers require pre-registered OAuth apps (servers that don't support dynamic client registration). Use `--client-id` and `--client-secret` flags:
+
+```bash
+claude mcp add --transport http \
+  --client-id your-client-id --client-secret --callback-port 8080 \
+  my-server https://mcp.example.com/mcp
+```
+
+The client secret is stored securely in the system keychain, not in config files.

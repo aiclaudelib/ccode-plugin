@@ -84,6 +84,8 @@ Base directory prepended to relative plugin source paths. Simplifies source path
 }
 ```
 
+**Caveat**: `pluginRoot` only works with simple names — direct children of the root directory. Sources with `./` prefix (e.g., `"./category/plugin"`) bypass `pluginRoot` and resolve from the marketplace root. Bare paths with `/` but no `./` prefix (e.g., `"category/plugin"`) fail schema validation. For categorized structures, skip `pluginRoot` and use full paths: `"source": "./plugins/category/plugin"`.
+
 ## Plugin entry schema
 
 ### Required fields
@@ -92,6 +94,18 @@ Base directory prepended to relative plugin source paths. Simplifies source path
 |---|---|---|
 | `name` | string | Plugin identifier (kebab-case). Users see it when installing: `/plugin install my-plugin@marketplace` |
 | `source` | string or object | Where to fetch the plugin from |
+
+**Supported source types:**
+
+| Source | Type | Key fields |
+|---|---|---|
+| Relative path | `string` (must start with `./`) | — |
+| `github` | object | `repo` (required), `ref?`, `sha?` |
+| `url` | object | `url` (required, must end `.git`), `ref?`, `sha?` |
+| `npm` | object | `package` (required), `version?`, `registry?` |
+| `pip` | object | `package` (required), `version?`, `registry?` |
+
+> **Note**: `npm` and `pip` sources may not yet be fully implemented.
 
 ### Optional standard metadata
 
@@ -115,8 +129,8 @@ Base directory prepended to relative plugin source paths. Simplifies source path
 
 ### `strict` field behavior
 
-- **`strict: true` (default)**: Marketplace component fields (`commands`, `agents`, `hooks`, `mcpServers`, `lspServers`) are merged with the plugin's own `plugin.json`. Both sources contribute components.
-- **`strict: false`**: The marketplace entry defines the plugin entirely. The plugin's `plugin.json` must NOT also declare components. Useful when the marketplace fully controls plugin configuration.
+- **`strict: true` (default)**: `plugin.json` is the authority for component definitions. The marketplace entry can supplement it with additional components, and both sources are merged.
+- **`strict: false`**: The marketplace entry is the entire definition. If the plugin also has a `plugin.json` that declares components, that's a conflict and the plugin fails to load. Useful when the marketplace operator wants full control over which files are exposed as commands, agents, hooks, etc.
 
 ### Optional component configuration
 
@@ -184,3 +198,9 @@ Key points:
 - `commands` and `agents` accept multiple directories or individual files
 - `${CLAUDE_PLUGIN_ROOT}` is required for paths in hooks and MCP server configs
 - `strict: false` means the marketplace entry fully defines the plugin
+
+## Version resolution
+
+Plugin versions determine cache paths and update detection. You can specify the version in `plugin.json` or in the marketplace entry.
+
+> **Warning**: Avoid setting the version in both places. The plugin manifest (`plugin.json`) always wins silently, which can cause the marketplace version to be ignored. For relative-path plugins, set the version in the marketplace entry. For all other plugin sources, set it in the plugin manifest.

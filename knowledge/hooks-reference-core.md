@@ -16,6 +16,11 @@ Configuration schema, handler fields, exit codes, JSON I/O formats, and decision
 | `SubagentStart`      | When a subagent is spawned                           |
 | `SubagentStop`       | When a subagent finishes                             |
 | `Stop`               | When Claude finishes responding                      |
+| `TeammateIdle`       | When an agent team teammate is about to go idle      |
+| `TaskCompleted`      | When a task is being marked as completed             |
+| `ConfigChange`       | When a configuration file changes during a session   |
+| `WorktreeCreate`     | When a worktree is being created (replaces default git behavior) |
+| `WorktreeRemove`     | When a worktree is being removed                     |
 | `PreCompact`         | Before context compaction                            |
 | `SessionEnd`         | When a session terminates                            |
 
@@ -46,9 +51,11 @@ The `matcher` field is a regex. Use `"*"`, `""`, or omit to match all occurrence
 | `SessionStart`                                                         | how the session started   | `startup`, `resume`, `clear`, `compact`                                        |
 | `SessionEnd`                                                           | why the session ended     | `clear`, `logout`, `prompt_input_exit`, `bypass_permissions_disabled`, `other` |
 | `Notification`                                                         | notification type         | `permission_prompt`, `idle_prompt`, `auth_success`, `elicitation_dialog`       |
-| `SubagentStart`, `SubagentStop`                                        | agent type                | `Bash`, `Explore`, `Plan`, or custom agent names                               |
+| `SubagentStart`                                                        | agent type                | `Bash`, `Explore`, `Plan`, or custom agent names                               |
+| `SubagentStop`                                                         | agent type                | same values as `SubagentStart`                                                 |
+| `ConfigChange`                                                         | configuration source      | `user_settings`, `project_settings`, `local_settings`, `policy_settings`, `skills` |
 | `PreCompact`                                                           | what triggered compaction | `manual`, `auto`                                                               |
-| `UserPromptSubmit`, `Stop`                                             | no matcher support        | always fires on every occurrence                                               |
+| `UserPromptSubmit`, `Stop`, `TeammateIdle`, `TaskCompleted`, `WorktreeCreate`, `WorktreeRemove` | no matcher support | always fires on every occurrence                                  |
 
 MCP tools follow the naming pattern `mcp__<server>__<tool>` (e.g. `mcp__memory__create_entities`). Use `mcp__memory__.*` to match all tools from one server.
 
@@ -140,6 +147,9 @@ All hook events receive these fields via stdin as JSON:
 | `UserPromptSubmit`   | Yes        | Blocks prompt processing and erases the prompt            |
 | `Stop`               | Yes        | Prevents Claude from stopping, continues the conversation |
 | `SubagentStop`       | Yes        | Prevents the subagent from stopping                       |
+| `TeammateIdle`       | Yes        | Prevents the teammate from going idle (continues working) |
+| `TaskCompleted`      | Yes        | Prevents the task from being marked as completed          |
+| `ConfigChange`       | Yes        | Blocks the configuration change (except `policy_settings`) |
 | `PostToolUse`        | No         | Shows stderr to Claude (tool already ran)                 |
 | `PostToolUseFailure` | No         | Shows stderr to Claude (tool already failed)              |
 | `Notification`       | No         | Shows stderr to user only                                 |
@@ -147,6 +157,8 @@ All hook events receive these fields via stdin as JSON:
 | `SessionStart`       | No         | Shows stderr to user only                                 |
 | `SessionEnd`         | No         | Shows stderr to user only                                 |
 | `PreCompact`         | No         | Shows stderr to user only                                 |
+| `WorktreeCreate`     | Yes        | Any non-zero exit code causes worktree creation to fail   |
+| `WorktreeRemove`     | No         | Failures are logged in debug mode only                    |
 
 ### JSON output
 
@@ -161,11 +173,14 @@ Exit 0 and print a JSON object to stdout. Only processed on exit 0. stdout must 
 
 #### Decision control
 
-| Events                                                                | Decision pattern     | Key fields                                                        |
-| :-------------------------------------------------------------------- | :------------------- | :---------------------------------------------------------------- |
-| UserPromptSubmit, PostToolUse, PostToolUseFailure, Stop, SubagentStop | Top-level `decision` | `decision: "block"`, `reason`                                     |
-| PreToolUse                                                            | `hookSpecificOutput` | `permissionDecision` (allow/deny/ask), `permissionDecisionReason` |
-| PermissionRequest                                                     | `hookSpecificOutput` | `decision.behavior` (allow/deny)                                  |
+| Events                                                                              | Decision pattern     | Key fields                                                        |
+| :---------------------------------------------------------------------------------- | :------------------- | :---------------------------------------------------------------- |
+| UserPromptSubmit, PostToolUse, PostToolUseFailure, Stop, SubagentStop, ConfigChange | Top-level `decision` | `decision: "block"`, `reason`                                     |
+| TeammateIdle, TaskCompleted                                                         | Exit code only       | Exit code 2 blocks the action, stderr is fed back as feedback     |
+| PreToolUse                                                                          | `hookSpecificOutput` | `permissionDecision` (allow/deny/ask), `permissionDecisionReason` |
+| PermissionRequest                                                                   | `hookSpecificOutput` | `decision.behavior` (allow/deny)                                  |
+| WorktreeCreate                                                                      | stdout path          | Hook prints absolute path to created worktree. Non-zero exit fails creation |
+| WorktreeRemove, Notification, SessionEnd, PreCompact                                | None                 | No decision control. Used for side effects like logging or cleanup |
 
 **Top-level decision** (UserPromptSubmit, PostToolUse, PostToolUseFailure, Stop, SubagentStop):
 
@@ -200,7 +215,9 @@ Exit 0 and print a JSON object to stdout. Only processed on exit 0. stdout must 
 
 Set `type: "prompt"` with a `prompt` string. Use `$ARGUMENTS` to inject hook input. The LLM returns a structured decision.
 
-Supported events: `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `PermissionRequest`, `UserPromptSubmit`, `Stop`, `SubagentStop`.
+Supported events (all three hook types): `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `PermissionRequest`, `UserPromptSubmit`, `Stop`, `SubagentStop`, `TaskCompleted`.
+
+Command-only events: `ConfigChange`, `Notification`, `PreCompact`, `SessionEnd`, `SessionStart`, `SubagentStart`, `TeammateIdle`, `WorktreeCreate`, `WorktreeRemove`.
 
 **Response schema**: `{ "ok": true }` to allow, `{ "ok": false, "reason": "..." }` to block.
 
@@ -220,7 +237,7 @@ Supported events: `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `Permission
 
 ## Agent-based hooks
 
-Set `type: "agent"`. Like prompt hooks but with multi-turn tool access (Read, Grep, Glob). Up to 50 turns. Same response schema.
+Set `type: "agent"`. Like prompt hooks but with multi-turn tool access (Read, Grep, Glob). Up to 50 turns. Same response schema. Supported on the same events as prompt hooks.
 
 ```json
 {

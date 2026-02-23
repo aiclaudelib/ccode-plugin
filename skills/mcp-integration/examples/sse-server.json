@@ -1,16 +1,21 @@
 {
-  "_comment": "Example SSE MCP server configuration for hosted cloud services",
+  "_comment": "Example remote MCP server configurations. Prefer HTTP (streamable-http) over SSE where available.",
+  "github": {
+    "type": "http",
+    "url": "https://api.githubcopilot.com/mcp/"
+  },
+  "sentry": {
+    "type": "http",
+    "url": "https://mcp.sentry.dev/mcp"
+  },
   "asana": {
     "type": "sse",
-    "url": "https://mcp.asana.com/sse"
-  },
-  "github": {
-    "type": "sse",
-    "url": "https://mcp.github.com/sse"
+    "url": "https://mcp.asana.com/sse",
+    "_comment": "SSE is deprecated; use HTTP when Asana provides an HTTP endpoint"
   },
   "custom-service": {
-    "type": "sse",
-    "url": "https://mcp.example.com/sse",
+    "type": "http",
+    "url": "https://mcp.example.com/mcp",
     "headers": {
       "X-API-Version": "v1",
       "X-Client-ID": "${CLIENT_ID}"
